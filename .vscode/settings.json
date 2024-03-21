@@ -1,0 +1,7 @@
+{
+  "files.associations": {
+    "list.h": "c",
+    "listpop.h": "c",
+    "thread": "c"
+  }
+}
