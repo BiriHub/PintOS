@@ -70,6 +70,7 @@ static void idle(void *aux UNUSED);
 static struct thread *running_thread(void);
 static struct thread *next_thread_to_run(void);
 static void init_thread(struct thread *, const char *name, int priority);
+bool compare_priority(const struct list_elem *a, const struct list_elem *b, void *aux);
 static bool is_thread(struct thread *) UNUSED;
 static void *alloc_frame(struct thread *, size_t size);
 static void schedule(void);
@@ -221,6 +222,13 @@ tid_t thread_create(const char *name, int priority,
   return tid;
 }
 
+bool compare_priority(const struct list_elem *a, const struct list_elem *b, void *aux)
+{
+    struct thread *ia = list_entry(a, struct thread, elem);
+    struct thread *ib = list_entry(b, struct thread, elem);
+    return (ia->priority > ib->priority);
+}
+
 /* Puts the current thread to sleep.  It will not be scheduled
    again until awoken by thread_unblock().
 
@@ -252,7 +260,9 @@ void thread_unblock(struct thread *t)
 
   old_level = intr_disable();
   ASSERT(t->status == THREAD_BLOCKED);
-  list_push_back(&ready_list, &t->elem);
+  //list_push_back(&ready_list, &t->elem);
+  // This expression needs to be rewritten as now the insertion is orderered by priority
+  list_insert_ordered(&ready_list, &t->elem, compare_priority, NULL);
   t->status = THREAD_READY;
   intr_set_level(old_level);
 }
@@ -319,8 +329,9 @@ void thread_yield(void)
   ASSERT(!intr_context());
 
   old_level = intr_disable();
-  if (cur != idle_thread)
-    list_push_back(&ready_list, &cur->elem);
+  if (cur != idle_thread) {
+      list_insert_ordered(&ready_list, &cur->elem, compare_priority, NULL);
+  }
   cur->status = THREAD_READY;
   schedule();
   intr_set_level(old_level);
