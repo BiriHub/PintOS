@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include <fpr_arith.h>
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -88,6 +89,8 @@ struct thread
    char name[16];             /* Name (for debugging purposes). */
    uint8_t *stack;            /* Saved stack pointer. */
    int priority;              /* Priority. */
+   int nice;                  /* Priority weight */
+   FPReal recent_cpu;          /* Recent CPU usage, expressed in Fixed-Point real*/
    struct list_elem allelem;  /* List element for all threads list. */
 
    /* Shared between thread.c and synch.c. */
@@ -99,6 +102,8 @@ struct thread
 #endif
    /* Time when we wanna wake up a thread (Assignment 2) */
    int64_t wakeupattick;
+
+
 
    /* Owned by thread.c. */
    unsigned magic; /* Detects stack overflow. */
