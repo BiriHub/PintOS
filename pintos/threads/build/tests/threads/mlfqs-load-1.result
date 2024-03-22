@@ -1,5 +1,0 @@
-FAIL
-Kernel panic in run: PANIC at ../../tests/threads/tests.c:91 in fail(): test failed
-Call stack: 0xc00280ae
-Translation of call stack:
-0xc00280ae: debug_panic (.../../lib/kernel/debug.c:38)
