@@ -24,6 +24,9 @@ typedef int tid_t;
 #define PRI_MIN 0      /* Lowest priority. */
 #define PRI_DEFAULT 31 /* Default priority. */
 #define PRI_MAX 63     /* Highest priority. */
+#define NICE_MIN -20   /* Lowest nice */
+#define NICE_MAX 20    /* Highest nice */
+#define NICE_INIT 0     /* Initial nice */
 
 /* A kernel thread or user process.
 
@@ -114,6 +117,7 @@ struct thread
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
 
+
 void thread_init(void);
 void thread_start(void);
 
@@ -146,5 +150,11 @@ int thread_get_recent_cpu(void);
 int thread_get_load_avg(void);
 /* Assignment 2 */
 void thread_sleep(int64_t);
+
+bool compare_priority(const struct list_elem *a, const struct list_elem *b, void *aux);
+void new_priority_mlfqs(struct thread *t);
+bool not_highest_priority(void);
+void new_load_avarage(void);
+void new_recent_cpu(struct thread *t);
 
 #endif /* threads/thread.h */

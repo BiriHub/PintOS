@@ -43,6 +43,8 @@ static struct thread *initial_thread;
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
 
+FPReal load_avg;
+
 /* Stack frame for kernel_thread(). */
 struct kernel_thread_frame
 {
@@ -72,6 +74,10 @@ static struct thread *running_thread(void);
 static struct thread *next_thread_to_run(void);
 static void init_thread(struct thread *, const char *name, int priority);
 bool compare_priority(const struct list_elem *a, const struct list_elem *b, void *aux);
+void new_priority_mlfqs(struct thread *t);
+bool not_highest_priority(void);
+void new_load_avarage(void);
+void new_recent_cpu(struct thread *t);
 static bool is_thread(struct thread *) UNUSED;
 static void *alloc_frame(struct thread *, size_t size);
 static void schedule(void);
@@ -101,6 +107,7 @@ void thread_init(void)
   list_init(&ready_list);
   list_init(&sleep_list);
   list_init(&all_list);
+  load_avg = INT_TO_FPR(0);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread();
@@ -146,6 +153,23 @@ void thread_tick(void)
     intr_yield_on_return();
 
   check_for_sleeping_threads();
+
+    if (thread_mlfqs)
+    {
+        struct thread *t = thread_current();
+        if (t != idle_thread) {
+            t->recent_cpu++;
+        }
+        if (timer_ticks () % TIMER_FREQ == 0)
+        {
+            new_load_avarage();
+            thread_foreach(new_recent_cpu, NULL);
+        }
+        if (timer_ticks () % 4 == 0)
+        {
+            thread_foreach (new_priority_mlfqs, NULL);
+        }
+    }
 }
 
 /* Prints thread statistics. */
@@ -189,6 +213,7 @@ tid_t thread_create(const char *name, int priority,
 
   /* Initialize thread. */
   init_thread(t, name, priority);
+  //printf("\n\ninit thread for %s with priority: %d and recent_cpu 0\n\n", t->name, t->priority);
   tid = t->tid = allocate_tid();
 
   /* Prepare thread for first run by initializing its stack.
@@ -216,9 +241,15 @@ tid_t thread_create(const char *name, int priority,
   /* Add to run queue. */
   thread_unblock(t);
 
-  if(t->priority > thread_get_priority()){
-      thread_yield();
-  }
+    if (thread_mlfqs){
+        if (thread_get_nice() < t->nice){
+            thread_yield();
+        }
+    } else{
+        if (t->priority > thread_get_priority()) {
+            thread_yield();
+        }
+    }
 
   return tid;
 }
@@ -357,9 +388,13 @@ void thread_foreach(thread_action_func *func, void *aux)
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void thread_set_priority(int new_priority)
 {
+    if (thread_mlfqs)
+    {
+        return;
+    }
   thread_current()->priority = new_priority;
-  struct thread *t = list_entry(list_begin(&ready_list), struct thread, elem);
-  if(t->priority > new_priority){
+  struct thread *first = list_entry(list_begin(&ready_list), struct thread, elem);
+  if(first->priority > new_priority){
       thread_yield();
   }
 }
@@ -371,30 +406,38 @@ int thread_get_priority(void)
 }
 
 /* Sets the current thread's nice value to NICE. */
-void thread_set_nice(int nice UNUSED)
+void thread_set_nice(int nice)
 {
-  /* Not yet implemented. */
+    ASSERT(thread_mlfqs);
+    ASSERT(nice >= NICE_MIN && nice <= NICE_MAX);
+    //printf("\n\nsetting nice level %d for %s\n\n", nice, thread_current()->name);
+    thread_current()->nice = nice;
+//    new_priority_mlfqs(thread_current());
+//    //printf("\n\nnew priority for %s with priority: %d \n\n", thread_current()->name, thread_current()->priority);
+//    if (not_highest_priority()) {
+//        thread_yield();
+//    }
 }
 
 /* Returns the current thread's nice value. */
 int thread_get_nice(void)
 {
-  /* Not yet implemented. */
-  return 0;
+    ASSERT (thread_mlfqs);
+    return thread_current()->nice;
+
 }
 
 /* Returns 100 times the system load average. */
 int thread_get_load_avg(void)
 {
-  /* Not yet implemented. */
-  return 0;
+    ASSERT(thread_mlfqs);
+    return FPR_TO_INT(load_avg) * 100;
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int thread_get_recent_cpu(void)
 {
-  /* Not yet implemented. */
-  return 0;
+    return FPR_TO_INT(thread_current()->recent_cpu) * 100;
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -480,8 +523,8 @@ init_thread(struct thread *t, const char *name, int priority)
   t->status = THREAD_BLOCKED;
   strlcpy(t->name, name, sizeof t->name);
   t->stack = (uint8_t *)t + PGSIZE;
-  t->priority = priority;
-  t->nice = 0;
+  if (!thread_mlfqs)
+      t->priority = priority;
   t->recent_cpu = INT_TO_FPR(0);
   t->magic = THREAD_MAGIC;
   list_push_back(&all_list, &t->allelem);
@@ -632,3 +675,51 @@ void check_for_sleeping_threads()
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof(struct thread, stack);
+
+void new_priority_mlfqs(struct thread *t){
+    ASSERT(thread_mlfqs);
+    int old_priority = t->priority;
+    t->priority = PRI_MAX -
+            (FPR_DIV_INT(t->recent_cpu, 4)) - (t->nice*2);
+    if (t->priority > PRI_MAX) {
+        t->priority = PRI_MAX;
+    }
+    if (t->priority < PRI_MIN) {
+        t->priority = PRI_MIN;
+    }
+    if (old_priority != t->priority && t->status == THREAD_READY && t != thread_current()){
+        list_remove(&t->elem);
+        list_insert_ordered(&ready_list, &t->elem, compare_priority, NULL);
+    }
+}
+
+bool not_highest_priority(void) {
+    if(!list_empty(&ready_list)){
+        struct thread *first = list_entry(list_front(&ready_list), struct thread, elem);
+        return first->priority > thread_current()->priority;
+    }
+    return false;
+}
+
+void new_load_avarage(void){
+    ASSERT(thread_mlfqs);
+    printf("\n\nload avarage calc\n");
+    FPReal sixty = INT_TO_FPR(60);
+    FPReal coeff1 = FPR_DIV_FPR(INT_TO_FPR(59), sixty);
+    FPReal coeff2 = FPR_DIV_FPR(INT_TO_FPR(1), sixty);
+    int ready_threads = list_size(&ready_list);
+    if (thread_current() != idle_thread) {
+        ready_threads++;
+        printf("    not idle\n");
+    }
+    load_avg = FPR_ADD_FPR(FPR_MUL_FPR(coeff1, load_avg),
+                           FPR_MUL_FPR(coeff2, INT_TO_FPR(ready_threads)));
+}
+
+void new_recent_cpu(struct thread *t){
+
+    ASSERT(thread_mlfqs);
+    FPReal coef = FPR_DIV_FPR(FPR_MUL_INT(load_avg, 2),
+                                  FPR_ADD_INT(FPR_MUL_INT(load_avg, 2), 1));
+    t->recent_cpu = FPR_ADD_INT(FPR_MUL_FPR(coef, t->recent_cpu), t->nice);
+}
