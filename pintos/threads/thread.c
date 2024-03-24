@@ -159,9 +159,7 @@ void thread_tick(void)
         struct thread *t = thread_current();
         if (t != idle_thread) {
             FPReal rec_cpu = t->recent_cpu;
-            //printf("\n\nOn thread (%s), before incrementing recent_cpu: %d\n", t->name, FPR_TO_INT(rec_cpu));
             t->recent_cpu = FPR_ADD_INT(rec_cpu, 1);
-            //printf("On thread (%s), after incrementing recent_cpu: %d\n", t->name, FPR_TO_INT(t->recent_cpu));
         }
         if (timer_ticks() % TIMER_FREQ == 0)
         {
@@ -244,15 +242,9 @@ tid_t thread_create(const char *name, int priority,
   /* Add to run queue. */
   thread_unblock(t);
 
-//    if (thread_mlfqs){
-//        if (thread_get_nice() < t->nice){
-//            thread_yield();
-//        }
-//    } else{
-        if (t->priority > thread_get_priority()) {
-            thread_yield();
-        }
-//    }
+  if (t->priority > thread_get_priority()) {
+      thread_yield();
+  }
 
   return tid;
 }
@@ -415,10 +407,7 @@ void thread_set_nice(int nice)
     ASSERT(nice >= NICE_MIN && nice <= NICE_MAX);
     thread_current()->nice = nice;
     new_priority_mlfqs(thread_current());
-    //printf("\nForm set_nice Thread (%s): new priority: %d, new nice value %d, rec_cpu: %d\n", thread_current()->name, thread_current()->priority, thread_current()->nice,
-           //FPR_TO_INT(thread_current()->recent_cpu));
     if (not_highest_priority()) {
-        //printf("\nThread (%s) needs to be yielded\n", thread_current()->name);
         thread_yield();
     }
 }
@@ -709,14 +698,12 @@ bool not_highest_priority(void) {
 
 void new_load_avarage(void){
     ASSERT(thread_mlfqs);
-    //printf("\n\nload avarage calc\n");
     FPReal sixty = INT_TO_FPR(60);
     FPReal coeff1 = FPR_DIV_FPR(INT_TO_FPR(59), sixty);
     FPReal coeff2 = FPR_DIV_FPR(INT_TO_FPR(1), sixty);
     int ready_threads = list_size(&ready_list);
     if (thread_current() != idle_thread) {
         ready_threads++;
-        //printf("    not idle\n");
     }
     load_avg = FPR_ADD_FPR(FPR_MUL_FPR(coeff1, load_avg),
                            FPR_MUL_FPR(coeff2, INT_TO_FPR(ready_threads)));
@@ -725,10 +712,7 @@ void new_load_avarage(void){
 void new_recent_cpu(struct thread *t){
 
     ASSERT(thread_mlfqs);
-    //printf("\n\nOn thread (%s), before recent_cpu: %d\n", t->name, FPR_TO_INT(t->recent_cpu));
     FPReal coeff = FPR_DIV_FPR(FPR_MUL_INT(load_avg, 2),
                                   FPR_ADD_INT(FPR_MUL_INT(load_avg, 2), 1));
-    //printf("the coeff is: %d\n", FPR_TO_INT(coeff*1000));
     t->recent_cpu = FPR_ADD_INT(FPR_MUL_FPR(coeff, t->recent_cpu), t->nice);
-    //printf("On thread (%s), recent_cpu: %d  nice: %d\n", t->name, FPR_TO_INT(t->recent_cpu), FPR_TO_INT(t->nice));
 }
