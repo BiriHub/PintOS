@@ -494,7 +494,7 @@ init_thread(struct thread *t, const char *name, int priority) {
     t->stack = (uint8_t *) t + PGSIZE;
     if (!thread_mlfqs)
         t->priority = priority;
-    t->recent_cpu = INT_TO_FPR(123);
+    t->recent_cpu = INT_TO_FPR(0);
     t->magic = THREAD_MAGIC;
     list_push_back(&all_list, &t->allelem);
 }
