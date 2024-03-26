@@ -78,7 +78,7 @@ bool compare_priority(const struct list_elem *a, const struct list_elem *b,
                       void *aux);
 void new_priority_mlfqs(struct thread *t);
 bool not_highest_priority(void);
-void new_load_avarage(void);
+void new_load_average(void);
 void new_recent_cpu(struct thread *t);
 static bool is_thread(struct thread *)UNUSED;
 static void *alloc_frame(struct thread *, size_t size);
@@ -160,7 +160,7 @@ void thread_tick(void) {
             t->recent_cpu = FPR_ADD_INT(rec_cpu, 1);
         }
         if (timer_ticks() % TIMER_FREQ == 0) {
-            new_load_avarage();
+            new_load_average();
             thread_foreach(new_recent_cpu, NULL);
         }
         if (timer_ticks() % 4 == 0) {
@@ -669,7 +669,7 @@ bool not_highest_priority(void) {
     return false;
 }
 
-void new_load_avarage(void) {
+void new_load_average(void) {
     ASSERT(thread_mlfqs);
     FPReal sixty = INT_TO_FPR(60);
     FPReal coeff1 = FPR_DIV_FPR(INT_TO_FPR(59), sixty);

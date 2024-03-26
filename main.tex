@@ -181,8 +181,7 @@ numberstyle = \tiny,
 
 \begin{itemize} 
     \item FPReal load\_avg  (\textit{added}): \newline
-    (ln. 46) it is a global variable that represent the average system load in number of ready+running threads per second in the last
-	minute
+    (ln. 46) it is a global variable that represent the average system load in number of ready and running threads per second in the last minute
 	\item void thread\_init(void) (\textit{modified}): \newline
 	(ln. 102) added the initilization of the global variable \texttt{load\_avg} (ln. 110)
 	\item void thread\_tick(void) (\textit{modified}): \newline
@@ -194,7 +193,7 @@ numberstyle = \tiny,
 	(ln. 198) the function has been modified in a way that makes the current thread yield if the created thread has an higher priority than the actual one 
 	\item bool compare\_priority(const struct list\_elem *a, const struct list\_elem *b, void *aux) (\textit{added}): \newline 
 	(ln. 257) auxiliary function used to sort threads inside the waiting queue based on the highest priority value
-
+	
 	\item void thread\_unblock(struct thread *t) (\textit{modified}): \newline 
 	(ln. 291) the function has been modified in a way that inserts the given thread in the ordered ready queue based on its priority. 
 	\item void thread\_yield(void) (\textit{modified}): \newline 
@@ -214,7 +213,17 @@ numberstyle = \tiny,
 	\item static void init\_thread(struct thread *t, const char *name, int priority) (\textit{modified}): \newline
 	(ln. 518) the function has been modified in a way that if the advanced scheduler is set, the given priority is not assigned to the given thread. In both scheduler options , the \texttt{recent\_cpu} field of the given thread is initilized.
 	\item void new\_priority\_mlfqs(struct thread *t) (\textit{implemented}): \newline
+	(ln. 642) auxiliary function used to adjust the priority level of the given thread which calculation depends on the initial value of that threat nice field. 
+	If the given thread has the priority updated , it is in the ready state and it is different from the current thread, then it inserted once again inside the ready list according to its new priority level.
 	
+	\item bool not\_highest\_priority(void) (\textit{implemented}): \newline
+	(ln. 663) auxiliary function used to check if the current thread has not the highest priority inside the ready queue of threads.
+
+	\item void new\_load\_average(void) (\textit{implemented}): \newline
+	(ln. 672) auxiliary function used to compute the new system load in number of ready and running threads per second in the last minute.
+	
+	\item void new\_recent\_cpu(struct thread *t) (\textit{implemented}): \newline
+	(ln. 685) auxiliary function used to compute the new recent cpu value for the given thread. 
 	
 
 \end{itemize}

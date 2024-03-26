@@ -154,7 +154,7 @@ void thread_sleep(int64_t);
 bool compare_priority(const struct list_elem *a, const struct list_elem *b, void *aux);
 void new_priority_mlfqs(struct thread *t);
 bool not_highest_priority(void);
-void new_load_avarage(void);
+void new_load_average(void);
 void new_recent_cpu(struct thread *t);
 
 #endif /* threads/thread.h */
