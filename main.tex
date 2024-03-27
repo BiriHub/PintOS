@@ -127,7 +127,7 @@ numberstyle = \tiny,
 \author{
 	\LARGE
 	Group 12 \\
-	Michelangelo Bettini, Leonardo Birindelli,Alessandro della Flora
+	Michelangelo Bettini, Leonardo Birindelli, Alessandro della Flora
 }
 
 \date{\normalsize Spring Semester, \today}
@@ -179,39 +179,41 @@ numberstyle = \tiny,
 
 \subsection*{pintos/threads/thread.c}
 
-\begin{itemize} 
+\begin{itemize}
+    \item #include <fpr\_arith.h>  (\textit{added}): \newline
+    (ln. 7) imported header file for Floating Point Real Data type.
     \item FPReal load\_avg  (\textit{added}): \newline
-    (ln. 46) it is a global variable that represent the average system load in number of ready and running threads per second in the last minute
+    (ln. 47) it is a global variable that represents the average system load based on the number of ready and running threads per second in the last minute
 	\item void thread\_init(void) (\textit{modified}): \newline
-	(ln. 102) added the initilization of the global variable \texttt{load\_avg} (ln. 110)
+	(ln. 111) Added the initialization of the global variable \texttt{load\_avg} 
 	\item void thread\_tick(void) (\textit{modified}): \newline
-	(ln. 137) the function has been modified in a way that implements the advanced scheduler. For the current thread, 
+	(ln. 156) the function has been modified in a way that implements the advanced scheduler. For the current thread, 
 	it increments by 1 the \texttt{recent\_cpu} value on every tick if the one is not idle, subsequently it updates the \texttt{load\_avg} based on all the \texttt{recent\_cpu} value of all ready and running threads and also updates the value of \texttt{recent\_cpu} 
 	depending on the value of the system load average every second. In conclusion, the function updates the priority level of each thread only every 4 ticks.   
 
 	\item tid\_t thread\_create(const char *name, int priority,thread\_func *function, void *aux) (\textit{modified}): \newline %priority scheduler
-	(ln. 198) the function has been modified in a way that makes the current thread yield if the created thread has an higher priority than the actual one 
+	(ln. 239) the function has been modified in a way that makes the current thread yield if the created thread has an higher priority than the actual one 
 	\item bool compare\_priority(const struct list\_elem *a, const struct list\_elem *b, void *aux) (\textit{added}): \newline 
-	(ln. 257) auxiliary function used to sort threads inside the waiting queue based on the highest priority value
+	(ln. 246) auxiliary function used to sort threads inside the waiting queue based on the highest priority value
 	
 	\item void thread\_unblock(struct thread *t) (\textit{modified}): \newline 
-	(ln. 291) the function has been modified in a way that inserts the given thread in the ordered ready queue based on its priority. 
+	(ln. 286) the function has been modified in a way that inserts the given thread in the ordered ready queue based on its priority. 
 	\item void thread\_yield(void) (\textit{modified}): \newline 
-	(ln. 341) the function has been modified in a way that inserts the current thread in the ordered ready queue based on its priority. 
+	(ln. 348) the function has been modified in a way that inserts the current thread in the ordered ready queue based on its priority. 
 	
 	\item void thread\_set\_priority(int new\_priority) (\textit{modified}): \newline 
-	(ln. 394) the function has been modified in a way that, if it is used the priority scheduler, updates the current thread priority with the given one and makes the current thread yield if the new priority is not the highest.
+	(ln. 372) the function has been modified in a way that, if it is used the priority scheduler, updates the current thread priority with the given one and makes the current thread yield if the new priority is not the highest.
 	
 	\item void thread\_set\_nice(int nice) (\textit{implemented}): \newline 
-	(ln. 413) the function has been implemented in a way that if the advanced scheduler is set and given nice value is acceptable, it updates the current thread nice field, recalculates its priority based on that and yield if the new priority is not the highest anymore.
+	(ln. 390) the function has been implemented in a way that if the advanced scheduler is set and given nice value is acceptable, it updates the current thread nice field, recalculates its priority based on that and yield if the new priority is not the highest anymore.
 	\item  int thread\_get\_nice(void) (\textit{implemented}): \newline 
-	(ln. 426) the function has been implemented to return the current thread nice value if the advanced scheduler is set.
+	(ln. 401) the function has been implemented to return the current thread nice value if the advanced scheduler is set.
 	\item int thread\_get\_load\_avg(void) (\textit{implemented}): \newline
-	(ln. 434) the function has been implemented in a way that returns 100 times the system load average if the advanced scheduler is set.
+	(ln. 408) the function has been implemented in a way that returns 100 times the system load average if the advanced scheduler is set.
 	\item int thread\_get\_recent\_cpu(void) (\textit{implemented}): \newline
-	(ln. 441) the function has been implemented in a way that returns 100 times the current thread's \texttt{recent\_cpu} value if the advanced scheduler is set.
+	(ln. 414) the function has been implemented in a way that returns 100 times the current thread's \texttt{recent\_cpu} value if the advanced scheduler is set.
 	\item static void init\_thread(struct thread *t, const char *name, int priority) (\textit{modified}): \newline
-	(ln. 518) the function has been modified in a way that if the advanced scheduler is set, the given priority is not assigned to the given thread. In both scheduler options, the \texttt{recent\_cpu} field of the given thread is initilized.
+	(ln. 495) the function has been modified in a way that if the advanced scheduler is set, the given priority is not assigned to the given thread. In both scheduler options, the \texttt{recent\_cpu} field of the given thread is initilized.
 	\item void new\_priority\_mlfqs(struct thread *t) (\textit{implemented}): \newline
 	(ln. 642) auxiliary function used to adjust the priority level of the given thread which calculation depends on the initial value of that threat nice field. 
 	If the given thread has the priority updated, it is in the ready state and it is different from the current thread, then it inserted once again inside the ready list according to its new priority level.
