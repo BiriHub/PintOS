@@ -59,7 +59,7 @@ commentstyle = \color{green}, %% set comment color
 keywordstyle = \color{blue}, %% set keyword color
 stringstyle = \color{red}, %% set string color
 rulecolor = \color{black}, %% set frame color to avoid being affected by text color
-basicstyle = \small \ttfamily , %% set listing font and size
+basicstyle = \small \ttfamily, %% set listing font and size
 breaklines = true, %% enable line breaking
 numberstyle = \tiny,
 }
@@ -186,8 +186,8 @@ numberstyle = \tiny,
 	(ln. 102) added the initilization of the global variable \texttt{load\_avg} (ln. 110)
 	\item void thread\_tick(void) (\textit{modified}): \newline
 	(ln. 137) the function has been modified in a way that implements the advanced scheduler. For the current thread, 
-	it increments by 1 the \texttt{recent\_cpu} value on every tick if the one is not idle , subsequently it updates the \texttt{load\_avg} based on all the \texttt{recent\_cpu} value of all ready and running threads and also updates the value of \texttt{recent\_cpu} 
-	depending on the value of the system load average every second. In conclusion , the function updates the priority level of each thread only every 4 ticks.   
+	it increments by 1 the \texttt{recent\_cpu} value on every tick if the one is not idle, subsequently it updates the \texttt{load\_avg} based on all the \texttt{recent\_cpu} value of all ready and running threads and also updates the value of \texttt{recent\_cpu} 
+	depending on the value of the system load average every second. In conclusion, the function updates the priority level of each thread only every 4 ticks.   
 
 	\item tid\_t thread\_create(const char *name, int priority,thread\_func *function, void *aux) (\textit{modified}): \newline %priority scheduler
 	(ln. 198) the function has been modified in a way that makes the current thread yield if the created thread has an higher priority than the actual one 
@@ -211,10 +211,10 @@ numberstyle = \tiny,
 	\item int thread\_get\_recent\_cpu(void) (\textit{implemented}): \newline
 	(ln. 441) the function has been implemented in a way that returns 100 times the current thread's \texttt{recent\_cpu} value if the advanced scheduler is set.
 	\item static void init\_thread(struct thread *t, const char *name, int priority) (\textit{modified}): \newline
-	(ln. 518) the function has been modified in a way that if the advanced scheduler is set, the given priority is not assigned to the given thread. In both scheduler options , the \texttt{recent\_cpu} field of the given thread is initilized.
+	(ln. 518) the function has been modified in a way that if the advanced scheduler is set, the given priority is not assigned to the given thread. In both scheduler options, the \texttt{recent\_cpu} field of the given thread is initilized.
 	\item void new\_priority\_mlfqs(struct thread *t) (\textit{implemented}): \newline
 	(ln. 642) auxiliary function used to adjust the priority level of the given thread which calculation depends on the initial value of that threat nice field. 
-	If the given thread has the priority updated , it is in the ready state and it is different from the current thread, then it inserted once again inside the ready list according to its new priority level.
+	If the given thread has the priority updated, it is in the ready state and it is different from the current thread, then it inserted once again inside the ready list according to its new priority level.
 	
 	\item bool not\_highest\_priority(void) (\textit{implemented}): \newline
 	(ln. 663) auxiliary function used to check if the current thread has not the highest priority inside the ready queue of threads.
