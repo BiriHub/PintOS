@@ -487,13 +487,13 @@ init_thread(struct thread *t, const char *name, int priority) {
     ASSERT(t != NULL);
     ASSERT(PRI_MIN <= priority && priority <= PRI_MAX);
     ASSERT(name != NULL);
-
     memset(t, 0, sizeof *t);
     t->status = THREAD_BLOCKED;
     strlcpy(t->name, name, sizeof t->name);
     t->stack = (uint8_t *) t + PGSIZE;
     if (!thread_mlfqs)
         t->priority = priority;
+    t->nice = 0;
     t->recent_cpu = INT_TO_FPR(0);
     t->magic = THREAD_MAGIC;
     list_push_back(&all_list, &t->allelem);
