@@ -55,34 +55,25 @@ bool has_valid_args(void *ptr, int args){
 
 static void
 syscall_handler (struct intr_frame *f UNUSED) {
-    if (!has_valid_args(f->esp, 1)) {
-        thread_exit();
-        return;
-    }
     int n_sc = *(int *) f->esp;
 
     switch (n_sc) {
         case SYS_EXIT:
         {
-            if (!has_valid_args(f->esp + 4, 1)) {
-                thread_exit();
-                return;
-            }
-            int status = *(int *) (f->esp + 4);
-            f->eax = status;
+            int *esp = f->esp;
+            struct thread* curr = thread_current();
+            curr->exit_status = *(esp+1);
+            thread_exit ();
             break;
         }
         case SYS_WRITE:
         {
-            const void *buffer = *(const void **)(f->esp + 8);
-            unsigned size = *(unsigned *)(f->esp + 12);
-
-            if (is_valid_ptr(buffer)) {
-                putbuf(buffer, size);
-                f->eax = size; // Return the number of bytes written.
-            } else {
-                f->eax = -1;
-            }
+            int *esp = f->esp;
+            ASSERT (*(esp+1) == STDOUT_FILENO);
+            char * buf = *(stack+2);
+            int len = *(stack+3);
+            putbuf (buffer, length);
+            f->eax = length;
             break;
         }
         default:
