@@ -50,16 +50,6 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
-  char * save_ptr;
-  fn_copy = strtok_r(fn_copy," ",&save_ptr);
-
-  // struct token arg;
-  // char * save_ptr;
-  // strtok_r(file_name," ",&save_ptr); // skip the file name
-
-  // while((arg.arg= strtok_r(NULL, " ", &save_ptr))){ //TODO: control later
-  //   list_push_back(&args_list,&arg);
-  // }
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
@@ -67,6 +57,17 @@ process_execute (const char *file_name)
     palloc_free_page (fn_copy); 
   return tid;
 }
+
+
+// /* This function takes the address of the top of the stack (*pp_stack_top),
+//  * copies the data pointed by ptrval (which has length len) and adjusts
+//  * the pointer to the top of the stack based on the number of bytes copied. */
+// void
+// push_stack(void ** pp_stack_top, void * ptrdata, int len){
+//   /* The stack grows downwards from its initial address. */
+//   *pp_stack_top -= len;
+//   memcpy(*pp_stack_top, ptrdata, len);
+// }
 
 /* A thread function that loads a user process and starts it
    running. */
@@ -77,6 +78,10 @@ start_process (void *file_name_)
   struct intr_frame if_;
   bool success;
 
+
+  char * save_ptr;
+  file_name = strtok_r(file_name," ",&save_ptr); // extract the file name from the list of parameters
+
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
@@ -85,9 +90,75 @@ start_process (void *file_name_)
   success = load (file_name, &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
-  palloc_free_page (file_name);
-  if (!success) 
+  if (!success) {
+    palloc_free_page (file_name);
     thread_exit ();
+  }else{
+    int size=10;
+    int i =0;
+    
+    //Save the content of the arguments
+
+  char **args = malloc(size * sizeof(char*));
+  char * arg ;
+  save_ptr=NULL;
+  while ( (arg = strtok_r (file_name, " ", &save_ptr)) ){
+
+    args[i] = malloc((strlen(arg) + 1) * sizeof(char));
+
+    if(args[i]==NULL){
+      goto error;
+    }
+
+    memcpy(args[i],arg,strlen(arg));//copy the content of arg into args[i]
+    //Reallocate memory if required
+    if(++i>=size){
+      size*=2;
+      args=realloc(args,size);
+      if(args==NULL)
+        goto error;
+    }
+  }
+
+  //Set the end of parameters
+  *args[i]=0;
+
+  /*Passing parameters to the stack*/
+
+  char* stack = if_.esp;
+  int lenght=4; //TODO: to find a reference of this size in the documentation
+
+  /*Push addresses of args[i]*/
+  int j;
+  for(j=i;j>=0;j--){
+     *stack-= lenght;
+    memcpy(stack, &args[j], lenght);
+  }
+
+  /*Push the arguments values to the stack*/
+  //TODO: check if it is correct
+  char * tmp= stack;
+  *stack-= lenght;
+  memcpy(stack,tmp, lenght);
+
+  /*Push the number of argument to the stack*/
+  *stack-= lenght;
+  memcpy(stack,&i, lenght);
+
+  /*Push return address of 0*/
+  *stack-= lenght;
+  memcpy(stack,0, lenght);
+
+
+
+  error:
+    //Free all the previous allocated memory area
+    while (i > 0)
+      free(args[--i]);
+    free(args);
+    return;
+  
+  }
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
