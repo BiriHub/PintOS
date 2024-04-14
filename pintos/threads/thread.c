@@ -13,6 +13,7 @@
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "devices/timer.h"
+#include "threads/malloc.h"
 
 #ifdef USERPROG
 #include "userprog/process.h"
@@ -208,9 +209,17 @@ tid_t thread_create(const char *name, int priority,
 
     /* Initialize thread. */
     init_thread(t, name, priority);
-    //printf("\n\ninit thread for %s with priority: %d and recent_cpu 0\n\n", t->name, t->priority);
+
     tid = t->tid = allocate_tid();
 
+    struct wait_process *child = malloc(sizeof(struct wait_process));
+
+    if(child){
+       child->tid=tid;
+        child->exit=false;
+        list_push_back(&thread_current()->children,&child->elem);
+    }
+    
     /* Prepare thread for first run by initializing its stack.
        Do this atomically so intermediate values for the 'stack'
        member cannot be observed. */
@@ -496,6 +505,9 @@ init_thread(struct thread *t, const char *name, int priority) {
     t->nice = 0;
     t->recent_cpu = INT_TO_FPR(0);
     t->magic = THREAD_MAGIC;
+    t->parent=thread_current()->tid;
+
+    list_init(&t->children);
     list_push_back(&all_list, &t->allelem);
 }
 
@@ -688,4 +700,9 @@ void new_recent_cpu(struct thread *t) {
     FPReal coeff = FPR_DIV_FPR(FPR_MUL_INT(load_avg, 2),
                                FPR_ADD_INT(FPR_MUL_INT(load_avg, 2), 1));
     t->recent_cpu = FPR_ADD_INT(FPR_MUL_FPR(coeff, t->recent_cpu), t->nice);
+}
+
+
+struct list* get_sleep_list(){
+    return &sleep_list;
 }

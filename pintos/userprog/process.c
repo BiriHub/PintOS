@@ -17,6 +17,14 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
+
+
+struct token{//TODO : to check again its utility
+  struct list_elem elem;
+  char* arg;
+};
+
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -29,6 +37,10 @@ tid_t
 process_execute (const char *file_name) 
 {
   char *fn_copy;
+  // struct list args_list;
+
+  // list_init(&args_list); 
+
   tid_t tid;
 
   /* Make a copy of FILE_NAME.
@@ -37,6 +49,17 @@ process_execute (const char *file_name)
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
+
+  char * save_ptr;
+  fn_copy = strtok_r(fn_copy," ",&save_ptr);
+
+  // struct token arg;
+  // char * save_ptr;
+  // strtok_r(file_name," ",&save_ptr); // skip the file name
+
+  // while((arg.arg= strtok_r(NULL, " ", &save_ptr))){ //TODO: control later
+  //   list_push_back(&args_list,&arg);
+  // }
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
@@ -86,17 +109,84 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
-{
-  return -1;
+process_wait (tid_t child_tid UNUSED) {
+
+  // Save the reference to the current thread 
+  struct thread* current_thread=thread_current();
+
+  //Initialize the child thread to NULL value 
+  struct wait_process * child=NULL;
+  struct list_elem* tmp; 
+
+    //Scroll all the thread in the children list of the current thread looking for if the child thread 
+    //with the specified tid is present in that structure
+   for(tmp = list_begin(&current_thread->children); tmp != list_end(&current_thread->children); tmp = list_next(tmp)){     //Traverse through each child  
+      struct wait_process  *element = list_entry(tmp, struct wait_process , elem);
+
+      if(element->tid == child_tid){   //checks if this the child process to be waited for
+        child = element;
+        break;
+      }
+   }
+
+  if(child == NULL) return -1; //the child has not been found in the list
+
+  if(child->exit) return -1; // the child has already exited
+  
+  thread_block();
+   
+  return child->exit; //TODO : check if the return values are correct (is -1 correct ?)
 }
 
 /* Free the current process's resources. */
+//TODO: check if everything works
 void
 process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+
+
+  // Notify the parent that the child has exited
+  struct thread *parent=NULL;
+  struct list_elem* tmp;
+
+  struct list* sleeping_threads_list=get_sleep_list();
+  for(tmp=list_begin(sleeping_threads_list);tmp!=list_end(sleeping_threads_list);tmp=list_next(tmp)){
+    struct thread* thread= list_entry(tmp,struct thread,elem);
+
+    if(thread->tid==cur->parent){
+      parent=thread;
+      break;
+    } 
+  }
+
+  /*Remove the child for the children list of the parent*/
+  struct wait_process *child;
+  tmp=NULL;
+
+   for(tmp = list_begin(&parent->children); tmp != list_end(&parent->children); tmp = list_next(tmp)){
+      struct wait_process  *element = list_entry(tmp, struct wait_process , elem);
+
+      if(element->tid == cur->tid){  
+        list_remove(tmp);    
+        break;
+      }
+   }
+  /*Remove all the threads from the children list of the current thread*/
+  tmp=NULL;
+  for(tmp = list_begin(&cur->children); tmp != list_end(&cur->children); tmp = list_remove(tmp)){
+    struct wait_process *child = list_entry(tmp, struct wait_process, elem);
+    free(child);
+    // next =  list_remove(child_elem);    
+    // release_child(child_wait_status); //Release a reference to the wait_status of each child process.
+  }
+
+
+
+  if(parent == NULL) return; /*the parent thread has already changed state*/
+  else  thread_unblock(parent); /* if child exits,then parent thread is unblocked */
+
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
