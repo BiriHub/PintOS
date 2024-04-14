@@ -87,6 +87,7 @@ static void schedule(void);
 void thread_schedule_tail(struct thread *prev);
 static tid_t allocate_tid(void);
 void check_for_sleeping_threads(void);
+struct thread *get_thread_by_tid(tid_t p_tid);
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -219,7 +220,7 @@ tid_t thread_create(const char *name, int priority,
         child->exit=false;
         list_push_back(&thread_current()->children,&child->elem);
     }
-    
+
     /* Prepare thread for first run by initializing its stack.
        Do this atomically so intermediate values for the 'stack'
        member cannot be observed. */
@@ -703,6 +704,17 @@ void new_recent_cpu(struct thread *t) {
 }
 
 
-struct list* get_sleep_list(){
-    return &sleep_list;
+struct thread *get_thread_by_tid(tid_t p_tid){
+    struct thread *parent = NULL;
+    struct list_elem le;
+    for (le = list_begin(&all_list); le != list_end(&all_list) ; le =
+            list_next(le))
+    {
+        struct thread *tmp = list_entry(le, struct thread, elem);
+        if (tmp->tid == p_tid) {
+            parent = tmp;
+            break;
+        }
+    }
+    return parent;
 }

@@ -39,7 +39,7 @@ process_execute (const char *file_name)
   char *fn_copy;
   // struct list args_list;
 
-  // list_init(&args_list); 
+  // list_init(&args_list);
 
   tid_t tid;
 
@@ -49,8 +49,12 @@ process_execute (const char *file_name)
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
+  char *saveptr;
+  file_name = strtok_r((char*)file_name, " ", &saveptr );
 
-
+  char * save_ptr;
+  fn_copy = strtok_r(fn_copy," ",&save_ptr);
+  
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
@@ -180,18 +184,18 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) {
+process_wait (tid_t child_tid) {
 
-  // Save the reference to the current thread 
+  // Save the reference to the current thread
   struct thread* current_thread=thread_current();
 
-  //Initialize the child thread to NULL value 
+  //Initialize the child thread to NULL value
   struct wait_process * child=NULL;
-  struct list_elem* tmp; 
+  struct list_elem* tmp;
 
-    //Scroll all the thread in the children list of the current thread looking for if the child thread 
+    //Scroll all the thread in the children list of the current thread looking for if the child thread
     //with the specified tid is present in that structure
-   for(tmp = list_begin(&current_thread->children); tmp != list_end(&current_thread->children); tmp = list_next(tmp)){     //Traverse through each child  
+   for(tmp = list_begin(&current_thread->children); tmp != list_end(&current_thread->children); tmp = list_next(tmp)){     //Traverse through each child
       struct wait_process  *element = list_entry(tmp, struct wait_process , elem);
 
       if(element->tid == child_tid){   //checks if this the child process to be waited for
@@ -203,14 +207,13 @@ process_wait (tid_t child_tid UNUSED) {
   if(child == NULL) return -1; //the child has not been found in the list
 
   if(child->exit) return -1; // the child has already exited
-  
+
   thread_block();
-   
+
   return child->exit; //TODO : check if the return values are correct (is -1 correct ?)
 }
 
 /* Free the current process's resources. */
-//TODO: check if everything works
 void
 process_exit (void)
 {
@@ -229,7 +232,7 @@ process_exit (void)
     if(thread->tid==cur->parent){
       parent=thread;
       break;
-    } 
+    }
   }
 
   /*Remove the child for the children list of the parent*/
@@ -239,8 +242,8 @@ process_exit (void)
    for(tmp = list_begin(&parent->children); tmp != list_end(&parent->children); tmp = list_next(tmp)){
       struct wait_process  *element = list_entry(tmp, struct wait_process , elem);
 
-      if(element->tid == cur->tid){  
-        list_remove(tmp);    
+      if(element->tid == cur->tid){
+        list_remove(tmp);
         break;
       }
    }
@@ -249,7 +252,7 @@ process_exit (void)
   for(tmp = list_begin(&cur->children); tmp != list_end(&cur->children); tmp = list_remove(tmp)){
     struct wait_process *child = list_entry(tmp, struct wait_process, elem);
     free(child);
-    // next =  list_remove(child_elem);    
+    // next =  list_remove(child_elem);
     // release_child(child_wait_status); //Release a reference to the wait_status of each child process.
   }
 

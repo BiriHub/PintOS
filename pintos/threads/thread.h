@@ -18,6 +18,17 @@ enum thread_status
 /* Thread identifier type.
    You can redefine this to whatever type you like. */
 typedef int tid_t;
+
+/*
+Used to handle the process waiting action
+*/
+struct wait_process{
+
+    tid_t tid;
+    bool exit;
+    struct list_elem elem;
+};
+
 #define TID_ERROR ((tid_t)-1) /* Error value for tid_t. */
 
 /* Thread priorities. */
@@ -107,6 +118,9 @@ struct thread
 #ifdef USERPROG
    /* Owned by userprog/process.c. */
    uint32_t *pagedir; /* Page directory. */
+   struct thread* parent_thread;
+   bool parent_blocked;
+   int exit_status;
 #endif
    /* Time when we wanna wake up a thread (Assignment 2) */
    int64_t wakeupattick;
@@ -116,16 +130,6 @@ struct thread
    /* Owned by thread.c. */
    unsigned magic; /* Detects stack overflow. */
 };
-
-/*
-Used to handle the process waiting action
-*/
-struct wait_process{
-
-   tid_t tid;
-   bool exit;
-   struct list_elem elem;
-}
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -172,6 +176,6 @@ bool not_highest_priority(void);
 void new_load_average(void);
 void new_recent_cpu(struct thread *t);
 
-struct list* get_sleep_list();
+struct list* get_sleep_list(void);
 
 #endif /* threads/thread.h */
