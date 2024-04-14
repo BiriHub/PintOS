@@ -96,6 +96,11 @@ struct thread
    FPReal recent_cpu;          /* Recent CPU usage, expressed in Fixed-Point real*/
    struct list_elem allelem;  /* List element for all threads list. */
 
+   struct wait_process children;  /*List of children*/
+   tid_t parent; /* tid of the parent thread*/
+
+
+
    /* Shared between thread.c and synch.c. */
    struct list_elem elem; /* List element. */
 
@@ -111,6 +116,16 @@ struct thread
    /* Owned by thread.c. */
    unsigned magic; /* Detects stack overflow. */
 };
+
+/*
+Used to handle the process waiting action
+*/
+struct wait_process{
+
+   tid_t tid;
+   bool exit;
+   struct list_elem elem;
+}
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -156,5 +171,7 @@ void new_priority_mlfqs(struct thread *t);
 bool not_highest_priority(void);
 void new_load_average(void);
 void new_recent_cpu(struct thread *t);
+
+struct list* get_sleep_list();
 
 #endif /* threads/thread.h */
