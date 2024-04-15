@@ -16,42 +16,6 @@ syscall_init (void)
     intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
-bool
-is_valid_ptr(const void *ptr)
-{
-    if (ptr == NULL || !is_user_vaddr(ptr) || pagedir_get_page
-                                                      (thread_current()->pagedir, ptr) == NULL) {
-        return false;
-    }
-    return true;
-}
-
-bool has_valid_args(void *ptr, int args){
-    int i;
-    args *= 4; // size of an arg in 32-bit sys
-    for(i = 0; i < args; i++)
-    {
-        if(is_valid_ptr(ptr+i))
-            return false;
-    }
-    return true;
-}
-
-//void exit(int status)
-//{
-//    struct thread *cur = thread_current();
-//
-//    printf("%s: exit(%d)\n", cur->name, status);
-//
-//    /* If its parent is still waiting for it,
-//     tell its parent its exit status. */
-//    if (cur->parent != NULL)
-//    {
-//        cur->parent->child_exit_status = status;
-//        // printf("parent %s: child_exit(%d)\n", cur->parent->name, cur->parent->child_exit_status);
-//    }
-//    thread_exit();
-//}
 
 static void
 syscall_handler (struct intr_frame *f UNUSED) {
@@ -70,10 +34,10 @@ syscall_handler (struct intr_frame *f UNUSED) {
         {
             int *esp = f->esp;
             ASSERT (*(esp+1) == STDOUT_FILENO);
-            char * buf = *(stack+2);
-            int len = *(stack+3);
-            putbuf (buffer, length);
-            f->eax = length;
+            char * buf = *(esp+2);
+            int len = *(esp+3);
+            putbuf (buf, len);
+            f->eax = len;
             break;
         }
         default:
