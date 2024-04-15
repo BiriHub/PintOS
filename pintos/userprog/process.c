@@ -19,11 +19,8 @@
 #include "threads/vaddr.h"
 #include "threads/malloc.h"
 
-
-struct token{//TODO : to check again its utility
-    struct list_elem elem;
-    char* arg;
-};
+void put_on_stack (void **, void *, int);
+void put_args_on_stack (void **, char *);
 
 
 static thread_func start_process NO_RETURN;
@@ -37,9 +34,6 @@ tid_t
 process_execute (const char *file_name)
 {
     char *fn_copy;
-    // struct list args_list;
-
-    // list_init(&args_list);
 
     tid_t tid;
 
@@ -49,11 +43,6 @@ process_execute (const char *file_name)
     if (fn_copy == NULL)
         return TID_ERROR;
     strlcpy (fn_copy, file_name, PGSIZE);
-    char *saveptr;
-    file_name = strtok_r((char*)file_name, " ", &saveptr );
-
-    char * save_ptr;
-    fn_copy = strtok_r(fn_copy," ",&save_ptr);
 
     /* Create a new thread to execute FILE_NAME. */
     tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
@@ -76,92 +65,29 @@ process_execute (const char *file_name)
 /* A thread function that loads a user process and starts it
    running. */
 static void
-start_process (void *file_name_)
+start_process (void *func)
 {
-    char *file_name = file_name_;
+    char fn[255];
+    strlcpy(fn, func, 255);
+    char * save;
+    strtok_r(fn, " ", &save);
     struct intr_frame if_;
     bool success;
-
-
-    char * save_ptr;
-    file_name = strtok_r(file_name," ",&save_ptr); // extract the file name from the list of parameters
 
     /* Initialize interrupt frame and load executable. */
     memset (&if_, 0, sizeof if_);
     if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
     if_.cs = SEL_UCSEG;
     if_.eflags = FLAG_IF | FLAG_MBS;
-    success = load (file_name, &if_.eip, &if_.esp);
+    success = load (fn, &if_.eip, &if_.esp);
 
     /* If load failed, quit. */
     if (!success) {
-        palloc_free_page (file_name);
+        palloc_free_page (func);
         thread_exit ();
     }else{
-        int size=10;
-        int i =0;
-
-        //Save the content of the arguments
-
-        char **args = malloc(size * sizeof(char*));
-        char * arg ;
-        save_ptr=NULL;
-        while ( (arg = strtok_r (file_name, " ", &save_ptr)) ){
-
-            args[i] = malloc((strlen(arg) + 1) * sizeof(char));
-
-            if(args[i]==NULL){
-                goto error;
-            }
-
-            memcpy(args[i],arg,strlen(arg));//copy the content of arg into args[i]
-            //Reallocate memory if required
-            if(++i>=size){
-                size*=2;
-                args=realloc(args,size);
-                if(args==NULL)
-                    goto error;
-            }
-        }
-
-        //Set the end of parameters
-        *args[i]=0;
-
-        /*Passing parameters to the stack*/
-
-        char* stack = if_.esp;
-        int lenght=4; //TODO: to find a reference of this size in the documentation
-
-        /*Push addresses of args[i]*/
-        int j;
-        for(j=i;j>=0;j--){
-            *stack-= lenght;
-            memcpy(stack, &args[j], lenght);
-        }
-
-        /*Push the arguments values to the stack*/
-        //TODO: check if it is correct
-        char * tmp= stack;
-        *stack-= lenght;
-        memcpy(stack,tmp, lenght);
-
-        /*Push the number of argument to the stack*/
-        *stack-= lenght;
-        memcpy(stack,&i, lenght);
-
-        /*Push return address of 0*/
-        *stack-= lenght;
-        memcpy(stack,0, lenght);
-
-
-
-        error:
-        //Free all the previous allocated memory area
-        while (i > 0)
-            free(args[--i]);
-        free(args);
-        return;
-
+        put_args_on_stack(&if_.esp, func);
+        palloc_free_page(func);
     }
 
     /* Start the user process by simulating a return from an
@@ -185,32 +111,23 @@ start_process (void *file_name_)
    does nothing. */
 int
 process_wait (tid_t child_tid) {
+#ifdef USERPROG
 
-    // Save the reference to the current thread
-    struct thread* current_thread=thread_current();
+    enum intr_level old_level = intr_disable ();
 
-    //Initialize the child thread to NULL value
-    struct wait_process * child=NULL;
-    struct list_elem* tmp;
+  struct thread * child = thread_get_by_tid(child_tid);
+  if (child == NULL || child->parent_thread != thread_current())
+    return -1;
 
-    //Scroll all the thread in the children list of the current thread looking for if the child thread
-    //with the specified tid is present in that structure
-    for(tmp = list_begin(&current_thread->children); tmp != list_end(&current_thread->children); tmp = list_next(tmp)){     //Traverse through each child
-        struct wait_process  *element = list_entry(tmp, struct wait_process , elem);
+  child->parent_blocked = true;
+  thread_block ();
 
-        if(element->tid == child_tid){   //checks if this the child process to be waited for
-            child = element;
-            break;
-        }
-    }
+  intr_set_level (old_level);
 
-    if(child == NULL) return -1; //the child has not been found in the list
-
-    if(child->exit) return -1; // the child has already exited
-
-    thread_block();
-
-    return child->exit; //TODO : check if the return values are correct (is -1 correct ?)
+  return child->exit_status;
+#else
+    return -1;
+#endif
 }
 
 /* Free the current process's resources. */
@@ -219,48 +136,6 @@ process_exit (void)
 {
     struct thread *cur = thread_current ();
     uint32_t *pd;
-
-
-    // Notify the parent that the child has exited
-    struct thread *parent=NULL;
-    struct list_elem* tmp;
-
-    struct list* sleeping_threads_list=get_sleep_list();
-    for(tmp=list_begin(sleeping_threads_list);tmp!=list_end(sleeping_threads_list);tmp=list_next(tmp)){
-        struct thread* thread= list_entry(tmp,struct thread,elem);
-
-        if(thread->tid==cur->parent){
-            parent=thread;
-            break;
-        }
-    }
-
-    /*Remove the child for the children list of the parent*/
-    struct wait_process *child;
-    tmp=NULL;
-
-    for(tmp = list_begin(&parent->children); tmp != list_end(&parent->children); tmp = list_next(tmp)){
-        struct wait_process  *element = list_entry(tmp, struct wait_process , elem);
-
-        if(element->tid == cur->tid){
-            list_remove(tmp);
-            break;
-        }
-    }
-    /*Remove all the threads from the children list of the current thread*/
-    tmp=NULL;
-    for(tmp = list_begin(&cur->children); tmp != list_end(&cur->children); tmp = list_remove(tmp)){
-        struct wait_process *child = list_entry(tmp, struct wait_process, elem);
-        free(child);
-        // next =  list_remove(child_elem);
-        // release_child(child_wait_status); //Release a reference to the wait_status of each child process.
-    }
-
-
-
-    if(parent == NULL) return; /*the parent thread has already changed state*/
-    else  thread_unblock(parent); /* if child exits,then parent thread is unblocked */
-
 
     /* Destroy the current process's page directory and switch back
        to the kernel-only page directory. */
@@ -278,6 +153,10 @@ process_exit (void)
         pagedir_activate (NULL);
         pagedir_destroy (pd);
     }
+    // IMPORTANT: without this the tests do not pass
+    printf("%s: exit(%d)\n", cur->name, cur->exit_status);
+    if (cur->parent_blocked)
+        thread_unblock(cur->parent_thread);
 }
 
 /* Sets up the CPU for running user code in the current
@@ -626,4 +505,42 @@ install_page (void *upage, void *kpage, bool writable)
        address, then map our page there. */
     return (pagedir_get_page (t->pagedir, upage) == NULL
             && pagedir_set_page (t->pagedir, upage, kpage, writable));
+}
+
+void
+put_on_stack(void ** top_of_stack, void * p_data, int len)
+{
+    *top_of_stack -= len;
+    memcpy(*top_of_stack, p_data, len);
+}
+void
+put_args_on_stack (void ** top_of_stack, char * cmd)
+{
+    void * stack_base = *top_of_stack;
+    char * arg_addr[32];
+    char * arg, * save_ptr;
+    int arg_count = 0;
+    for ( arg  = strtok_r (cmd, " ", &save_ptr) ;
+          arg != NULL ;
+          arg  = strtok_r (NULL, " ", &save_ptr) )
+    {
+        int arg_len = strlen(arg) + 1;
+        put_on_stack (top_of_stack, arg, arg_len);
+        arg_addr[arg_count++] = *top_of_stack;
+    }
+    arg_addr[arg_count] = 0;
+
+// format it for 4-bit stack
+    int delta = (stack_base - *top_of_stack) % 4;
+    int shift = 4 - delta;
+    *top_of_stack -= shift;
+    int i;
+    for (i = arg_count ; i >= 0 ; i--) {
+        put_on_stack (top_of_stack, &arg_addr[i], 4);
+    }
+    char *argv_arr_addr = *top_of_stack;
+    put_on_stack (top_of_stack, &argv_arr_addr, 4);
+    put_on_stack (top_of_stack, &arg_count, 4);
+    int z = 0;
+    put_on_stack (top_of_stack, &z, 4);
 }
