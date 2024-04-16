@@ -104,10 +104,10 @@ struct thread
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
-    uint32_t * pagedir;                 /* Page directory. */
-    struct thread *parent_thread;
-    bool parent_blocked;
-    int exit_status;
+    uint32_t * pagedir;                /* Page directory. */
+    struct thread *parent;             /* Parent thread. */   
+    bool is_parent_waiting;            /* Parent is waiting for this thread to exit. */
+    int exit_status;                   /* Exit status of the thread. */
 #endif
 
     int64_t wakeup_at_tick;
@@ -166,6 +166,5 @@ bool thread_priority_cmp (const struct list_elem* a,
                           const struct list_elem* b,
                           void* aux);
 struct thread *thread_get_by_tid (int tid);
-struct list *get_sleep_list(void);
 
 #endif /* threads/thread.h */

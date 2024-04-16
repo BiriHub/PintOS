@@ -75,35 +75,19 @@ static struct thread *running_thread (void);
 static struct thread *next_thread_to_run (void);
 static void init_thread (struct thread *, const char *name, int priority);
 static bool is_thread (struct thread *) UNUSED;
-                                        static void *alloc_frame (struct thread *, size_t size);
-                                        static void schedule (void);
-                                        void thread_schedule_tail (struct thread *prev);
-                                        static tid_t allocate_tid (void);
-                                        void check_sleeping_threads(void);
-                                        void thread_recalculate_priority(struct thread *, void *);
-                                        void thread_recalculate_priority_all_threads(void);
-                                        void thread_recalculate_load_avg(void);
-                                        void thread_recalculate_recent_cpu (struct thread *, void *);
-                                        void thread_recalculate_recent_cpu_all_threads(void);
-                                        void thread_yield_for_higher_priority(void);
-                                        bool thread_cmp_priority (const struct list_elem *, const struct list_elem *, void *);
-        struct thread *thread_get_by_tid (int tid);
-        struct list *get_sleep_list(void);
-struct thread *
-thread_get_by_tid (int tid) {
-    struct thread * th = 0;
-
-    struct list_elem * it;
-    for (it  = list_begin(&all_list) ;
-         it != list_end  (&all_list) ;
-         it  = list_next (it))
-    {
-        struct thread * elth = list_entry(it, struct thread, allelem);
-        if (elth->tid == tid) { th = elth; break; }
-    }
-
-    return th;
-}
+static void *alloc_frame (struct thread *, size_t size);
+static void schedule (void);
+void thread_schedule_tail (struct thread *prev);
+static tid_t allocate_tid (void);
+void check_sleeping_threads(void);
+void thread_recalculate_priority(struct thread *, void *);
+void thread_recalculate_priority_all_threads(void);
+void thread_recalculate_load_avg(void);
+void thread_recalculate_recent_cpu (struct thread *, void *);
+void thread_recalculate_recent_cpu_all_threads(void);
+void thread_yield_for_higher_priority(void);
+bool thread_cmp_priority (const struct list_elem *, const struct list_elem *, void *);
+struct thread *thread_get_by_tid (int tid);
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -278,8 +262,8 @@ thread_create (const char *name, int priority,
     tid = t->tid = allocate_tid ();
       #ifdef USERPROG
   t->exit_status = TID_ERROR;
-  t->parent_thread = thread_current ();
-  t->parent_blocked = false;
+  t->parent = thread_current ();
+  t->is_parent_waiting = false;
   #endif
 
     /* Prepare thread for first run by initializing its stack.
@@ -582,6 +566,25 @@ bool thread_cmp_priority (const struct list_elem *a,
     return (th_a->priority < th_b->priority);
 }
 
+/* Returns the thread with the given tid. */
+struct thread *thread_get_by_tid (int tid) {
+    struct thread * th = 0;
+
+    struct list_elem * it;
+    for (it  = list_begin(&all_list) ;
+         it != list_end  (&all_list) ;
+         it  = list_next (it))
+    {
+        struct thread * elth = list_entry(it, struct thread, allelem);
+        if (elth->tid == tid) { th = elth; break; }
+    }
+
+    return th;
+}
+
+
+
+
 /* Idle thread.  Executes when no other thread is ready to run.
 
    The idle thread is initially put on the ready list by
@@ -813,7 +816,3 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
-
-struct list *get_sleep_list(void){
-    return &sleeping_list;
-}

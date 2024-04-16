@@ -19,8 +19,8 @@
 #include "threads/vaddr.h"
 #include "threads/malloc.h"
 
-void put_on_stack (void **, void *, int);
-void put_args_on_stack (void **, char *);
+void push_stack (void **, void *, int);
+void push_args (void **, char *);
 
 
 static thread_func start_process NO_RETURN;
@@ -34,7 +34,6 @@ tid_t
 process_execute (const char *file_name)
 {
     char *fn_copy;
-
     tid_t tid;
 
     /* Make a copy of FILE_NAME.
@@ -51,26 +50,25 @@ process_execute (const char *file_name)
     return tid;
 }
 
-
-// /* This function takes the address of the top of the stack (*pp_stack_top),
-//  * copies the data pointed by ptrval (which has length len) and adjusts
-//  * the pointer to the top of the stack based on the number of bytes copied. */
-// void
-// push_stack(void ** pp_stack_top, void * ptrdata, int len){
-//   /* The stack grows downwards from its initial address. */
-//   *pp_stack_top -= len;
-//   memcpy(*pp_stack_top, ptrdata, len);
-// }
-
 /* A thread function that loads a user process and starts it
    running. */
 static void
 start_process (void *func)
 {
-    char fn[255];
-    strlcpy(fn, func, 255);
+    char* fn;
     char * save;
-    strtok_r(fn, " ", &save);
+    int size = 15; // max length of the file name
+
+    fn=malloc(size);
+    if(fn==NULL){
+        palloc_free_page(func);
+        thread_exit();
+    }
+
+    strlcpy(fn, func,size);
+
+    strtok_r(fn, " ", &save); // extract the executable file name
+
     struct intr_frame if_;
     bool success;
 
@@ -84,11 +82,14 @@ start_process (void *func)
     /* If load failed, quit. */
     if (!success) {
         palloc_free_page (func);
+        free(fn);
         thread_exit ();
     }else{
-        put_args_on_stack(&if_.esp, func);
+        push_args(&if_.esp, func);
+        free(fn);
         palloc_free_page(func);
     }
+    
 
     /* Start the user process by simulating a return from an
        interrupt, implemented by intr_exit (in
@@ -113,13 +114,13 @@ int
 process_wait (tid_t child_tid) {
 #ifdef USERPROG
 
-    enum intr_level old_level = intr_disable ();
+enum intr_level old_level = intr_disable ();
 
   struct thread * child = thread_get_by_tid(child_tid);
-  if (child == NULL || child->parent_thread != thread_current())
+  if (!child || child->parent != thread_current())
     return -1;
 
-  child->parent_blocked = true;
+  child->is_parent_waiting = true;
   thread_block ();
 
   intr_set_level (old_level);
@@ -155,8 +156,8 @@ process_exit (void)
     }
     // IMPORTANT: without this the tests do not pass
     printf("%s: exit(%d)\n", cur->name, cur->exit_status);
-    if (cur->parent_blocked)
-        thread_unblock(cur->parent_thread);
+    if (cur->is_parent_waiting)
+        thread_unblock(cur->parent);
 }
 
 /* Sets up the CPU for running user code in the current
@@ -508,39 +509,58 @@ install_page (void *upage, void *kpage, bool writable)
 }
 
 void
-put_on_stack(void ** top_of_stack, void * p_data, int len)
+push_stack(void ** top_of_stack, void * p_data, int len)
 {
     *top_of_stack -= len;
     memcpy(*top_of_stack, p_data, len);
 }
 void
-put_args_on_stack (void ** top_of_stack, char * cmd)
-{
-    void * stack_base = *top_of_stack;
-    char * arg_addr[32];
-    char * arg, * save_ptr;
-    int arg_count = 0;
-    for ( arg  = strtok_r (cmd, " ", &save_ptr) ;
-          arg != NULL ;
-          arg  = strtok_r (NULL, " ", &save_ptr) )
-    {
-        int arg_len = strlen(arg) + 1;
-        put_on_stack (top_of_stack, arg, arg_len);
-        arg_addr[arg_count++] = *top_of_stack;
-    }
-    arg_addr[arg_count] = 0;
+push_args (void** top_of_stack, char * cmd){
+    void* stack_base = *top_of_stack;
 
-// format it for 4-bit stack
-    int delta = (stack_base - *top_of_stack) % 4;
-    int shift = 4 - delta;
-    *top_of_stack -= shift;
-    int i;
-    for (i = arg_count ; i >= 0 ; i--) {
-        put_on_stack (top_of_stack, &arg_addr[i], 4);
+    int max_args = 10; //start with an arbitrarity number of arguments
+    char **arg_addr = malloc(max_args * sizeof(char*));
+    if (arg_addr == NULL) {return;}
+
+    char *arg, *save_ptr;
+    int i = 0;
+    for (arg = strtok_r(cmd, " ", &save_ptr);
+         arg != NULL && i < max_args;
+         arg = strtok_r(NULL, " ", &save_ptr)){
+
+        int arg_len = strlen(arg) + 1;
+        push_stack(top_of_stack, arg, arg_len);
+        arg_addr[i++] =* top_of_stack;
+
+        if(i == max_args){
+            max_args *= 2;
+            arg_addr = realloc(arg_addr, max_args * sizeof(char*));
+            if (arg_addr == NULL) {return;}
+        }
     }
+    arg_addr[i] = 0;
+
+    //format it for 4 byte stack
+    int delta = (stack_base - *top_of_stack) % 4;
+    int shift = (4 - delta) % 4;
+    *top_of_stack -= shift;
+
+    //Push addresses of arguments on the stack
+    int j;
+    for (j = i; j >= 0; j--) {
+        push_stack(top_of_stack, &arg_addr[j], sizeof(char*));
+    }
+
+    //Push the argv address on the stack 
     char *argv_arr_addr = *top_of_stack;
-    put_on_stack (top_of_stack, &argv_arr_addr, 4);
-    put_on_stack (top_of_stack, &arg_count, 4);
+    push_stack(top_of_stack, &argv_arr_addr, sizeof(char**));
+
+    //Push the number of arguments on the stack.
+    push_stack(top_of_stack, &i, sizeof(int));
+
+    //Push a zero for showing the end of the frame on the stack
     int z = 0;
-    put_on_stack (top_of_stack, &z, 4);
+    push_stack(top_of_stack, &z, sizeof(int));
+    
+    free(arg_addr);
 }

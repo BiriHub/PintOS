@@ -28,7 +28,7 @@
 \usepackage{chemfig}
 % \usepackage{minted}
 \usepackage{caption}
-\usepackage{subcaption}
+% \usepackage{subcaption}
 
 	
 \usepackage{color, colortbl}
@@ -110,7 +110,7 @@ numberstyle = \tiny,
     \vspace{-3cm} 
     \begin{figure}[H]
         \hspace{-2cm}
-    	\includegraphics[width=65mm]{./template/usi-inf-logo.png}
+    	\includegraphics[width=65mm]{template/usi-inf-logo.png}
     \end{figure}
     \vspace{1cm} 
 	\normalfont\large
@@ -158,6 +158,8 @@ numberstyle = \tiny,
 \begin{itemize}
     \item pintos/threads/thread.h
     \item pintos/threads/thread.c 
+    \item pintos/userprog/syscall.c
+    \item pintos/userprog/process.c
 \end{itemize}
 
 \section{Changes}
@@ -165,69 +167,41 @@ numberstyle = \tiny,
 \subsection*{pintos/threads/thread.h}
 
 \begin{itemize}
-	\item \#define NICE\_MIN -20 (\textit{added}): \newline
-		(ln. 27) represents the minimum value for the field nice
-	\item \#define NICE\_MAX 20 (\textit{added}) :\newline
-		(ln. 28) represents the maximum value for the field nice
-	\item \#define NICE\_INIT 0 (\textit{added}):\newline
-		(ln. 29) represents the initial value for the field nice
-    \item struct thread (\textit{implemented}):\newline
-    It has been added to the struct two new fields : \texttt{int nice} (ln. 95) represents the niceness value of a thread ; \texttt{FPReal recent\_cpu} (ln. 96) represents how much cpu the thread has used recently expressed in Fixed-Point real.    
-
+	\item struct thread (\textit{implemented}):\newline
+    It has been added to the struct three new fields in the struct section USERPROG owned by the userprog/process.c : \texttt{struct thread *parent} (ln. 108) represents the reference to the parent thread of the actual thread; \texttt{bool is\_parent\_waiting} (ln. 109) checks if the parent is waiting for this thread to exit or not; 
+		\texttt{int exit\_status} (ln. 110) represents the exit status of the thread.
+	\item struct thread *thread\_get\_by\_tid (int tid) (\textit{added}):\newline
+	(ln. 168) auxiliary function used to obtain the thread specified with the given identifier.
     
 \end{itemize}
 
 \subsection*{pintos/threads/thread.c}
 
 \begin{itemize}
-    \item #include <fpr\_arith.h>  (\textit{added}): \newline
-    (ln. 7) imported header file for Floating Point Real Data type.
-    \item FPReal load\_avg  (\textit{added}): \newline
-    (ln. 47) it is a global variable that represents the average system load based on the number of ready and running threads per second in the last minute
-	\item void thread\_init(void) (\textit{modified}): \newline
-	(ln. 111) Added the initialization of the global variable \texttt{load\_avg} 
-	\item void thread\_tick(void) (\textit{modified}): \newline
-	(ln. 156) the function has been modified in a way that implements the advanced scheduler. For the current thread, 
-	it increments by 1 the \texttt{recent\_cpu} value on every tick if the one is not idle, subsequently it updates the \texttt{load\_avg} based on all the \texttt{recent\_cpu} value of all ready and running threads and also updates the value of \texttt{recent\_cpu} 
-	depending on the value of the system load average every second. In conclusion, the function updates the priority level of each thread only every 4 ticks.   
-
-	\item tid\_t thread\_create(const char *name, int priority,thread\_func *function, void *aux) (\textit{modified}): \newline %priority scheduler
-	(ln. 239) the function has been modified in a way that makes the current thread yield if the created thread has an higher priority than the actual one 
-	\item bool compare\_priority(const struct list\_elem *a, const struct list\_elem *b, void *aux) (\textit{added}): \newline 
-	(ln. 246) auxiliary function used to sort threads inside the waiting queue based on the highest priority value
-	
-	\item void thread\_unblock(struct thread *t) (\textit{modified}): \newline 
-	(ln. 286) the function has been modified in a way that inserts the given thread in the ordered ready queue based on its priority. 
-	\item void thread\_yield(void) (\textit{modified}): \newline 
-	(ln. 348) the function has been modified in a way that inserts the current thread in the ordered ready queue based on its priority. 
-	
-	\item void thread\_set\_priority(int new\_priority) (\textit{modified}): \newline 
-	(ln. 372) the function has been modified in a way that, if it is used the priority scheduler, updates the current thread priority with the given one and makes the current thread yield if the new priority is not the highest.
-	
-	\item void thread\_set\_nice(int nice) (\textit{implemented}): \newline 
-	(ln. 390) the function has been implemented in a way that if the advanced scheduler is set and given nice value is acceptable, it updates the current thread nice field, recalculates its priority based on that and yield if the new priority is not the highest anymore.
-	\item  int thread\_get\_nice(void) (\textit{implemented}): \newline 
-	(ln. 401) the function has been implemented to return the current thread nice value if the advanced scheduler is set.
-	\item int thread\_get\_load\_avg(void) (\textit{implemented}): \newline
-	(ln. 408) the function has been implemented in a way that returns 100 times the system load average if the advanced scheduler is set.
-	\item int thread\_get\_recent\_cpu(void) (\textit{implemented}): \newline
-	(ln. 414) the function has been implemented in a way that returns 100 times the current thread's \texttt{recent\_cpu} value if the advanced scheduler is set.
-	\item static void init\_thread(struct thread *t, const char *name, int priority) (\textit{modified}): \newline
-	(ln. 495) the function has been modified in a way that if the advanced scheduler is set, the given priority is not assigned to the given thread. In both scheduler options, the \texttt{recent\_cpu} field of the given thread is initilized.
-	\item void new\_priority\_mlfqs(struct thread *t) (\textit{implemented}): \newline
-	(ln. 642) auxiliary function used to adjust the priority level of the given thread which calculation depends on the initial value of that threat nice field. 
-	If the given thread has the priority updated, it is in the ready state and it is different from the current thread, then it inserted once again inside the ready list according to its new priority level.
-	
-	\item bool not\_highest\_priority(void) (\textit{implemented}): \newline
-	(ln. 663) auxiliary function used to check if the current thread has not the highest priority inside the ready queue of threads.
-
-	\item void new\_load\_average(void) (\textit{implemented}): \newline
-	(ln. 672) auxiliary function used to compute the new system load in number of ready and running threads per second in the last minute.
-	
-	\item void new\_recent\_cpu(struct thread *t) (\textit{implemented}): \newline
-	(ln. 685) auxiliary function used to compute the new recent cpu value for the given thread. 
-	
-
+	\item struct thread *thread\_get\_by\_tid (int tid) (\textit{implemented}):\newline
+	(ln. 570) auxiliary function used to obtain the thread specified with the given identifier.
 \end{itemize}
+
+\subsection*{pintos/userprog/syscall.c}
+
+\begin{itemize}
+	\item static void syscall\_handler (struct intr\_frame *f) (\textit{implemented}):\newline
+	(ln. 23) implements the syscall handler function so as it is able to handle the \textit{exit} and \textit{write} system calls.
+\end{itemize}
+
+\subsection*{pintos/userprog/process.c}
+
+\begin{itemize}
+	%TODO
+	\item static void start\_process (void *func) (\textit{implemented}):\newline
+	\item static void start\_process (void *func) (\textit{implemented}):\newline
+	\item void push\_stack(void ** top\_of\_stack, void * p\_data, int len)
+	\item void	push\_args (void** top\_of\_stack, char * cmd)
+	\item int process\_wait (tid\_t child\_tid)
+	
+	% \item static void syscall\_handler (struct intr\_frame *f) (\textit{implemented}):\newline
+	% (ln. 23) implements the syscall handler function so as it is able to handle the \textit{exit} and \textit{write} system calls.
+\end{itemize}
+
 
 \end{document}
