@@ -19,12 +19,11 @@
 #include "threads/vaddr.h"
 #include "threads/malloc.h"
 
-void push_stack (void **, void *, int);
-void push_args (void **, char *);
-
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+void push_stack (void **, void *, int);
+void push_args (void **, char *);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -114,21 +113,23 @@ int
 process_wait (tid_t child_tid) {
 #ifdef USERPROG
 
+//disable interrupts
 enum intr_level old_level = intr_disable ();
 
   struct thread * child = thread_get_by_tid(child_tid);
-  if (!child || child->parent != thread_current())
-    return -1;
-
+  //checks if the child thread is valid and if it is a child of the current thread
+  if(!child || child->parent != thread_current()) return -1;
+   
+  //Use the thread_block() to block the parent thread until the child thread exits
   child->is_parent_waiting = true;
   thread_block ();
 
   intr_set_level (old_level);
 
   return child->exit_status;
-#else
-    return -1;
 #endif
+
+    return -1;
 }
 
 /* Free the current process's resources. */
@@ -156,7 +157,9 @@ process_exit (void)
     }
     // IMPORTANT: without this the tests do not pass
     printf("%s: exit(%d)\n", cur->name, cur->exit_status);
-    if (cur->is_parent_waiting)
+
+    //If the parent is waiting for the child to exit, unblock the parent
+    if(cur->is_parent_waiting)
         thread_unblock(cur->parent);
 }
 
@@ -518,7 +521,9 @@ void
 push_args (void** top_of_stack, char * cmd){
     void* stack_base = *top_of_stack;
 
-    int max_args = 10; //start with an arbitrarity number of arguments
+    //Start with an arbitrarity number of arguments
+    //for dynamic memory allocation
+    int max_args = 10; 
     char **arg_addr = malloc(max_args * sizeof(char*));
     if (arg_addr == NULL) {return;}
 
@@ -540,7 +545,7 @@ push_args (void** top_of_stack, char * cmd){
     }
     arg_addr[i] = 0;
 
-    //format it for 4 byte stack
+    //Required alignment for 4 byte stack
     int delta = (stack_base - *top_of_stack) % 4;
     int shift = (4 - delta) % 4;
     *top_of_stack -= shift;

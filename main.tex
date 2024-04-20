@@ -195,9 +195,10 @@ numberstyle = \tiny,
 	%TODO
 	\item static void start\_process (void *func) (\textit{implemented}):\newline
 	\item static void start\_process (void *func) (\textit{implemented}):\newline
-	\item void push\_stack(void ** top\_of\_stack, void * p\_data, int len)
-	\item void	push\_args (void** top\_of\_stack, char * cmd)
-	\item int process\_wait (tid\_t child\_tid)
+	\item int process\_wait (tid\_t child\_tid) (\textit{implemented}):\newline
+	\item void process\_exit (void) (\textit{implemented}):\newline
+	\item void push\_stack (void ** top\_of\_stack, void * p\_data, int len) (\textit{added}):\newline
+	\item void	push\_args (void** top\_of\_stack, char * cmd) (\textit{added}):\newline
 	
 	% \item static void syscall\_handler (struct intr\_frame *f) (\textit{implemented}):\newline
 	% (ln. 23) implements the syscall handler function so as it is able to handle the \textit{exit} and \textit{write} system calls.
