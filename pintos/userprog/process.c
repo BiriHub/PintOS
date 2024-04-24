@@ -521,7 +521,7 @@ void
 push_args (void** top_of_stack, char * cmd){
     void* stack_base = *top_of_stack;
 
-    //Start with an arbitrarity number of arguments
+    //Start with an arbitrary number of arguments
     //for dynamic memory allocation
     int max_args = 10; 
     char **arg_addr = malloc(max_args * sizeof(char*));
