@@ -123,6 +123,8 @@ strchr (const char *string, int c_)
       return NULL;
     else
       string++;
+
+  return 0;
 }
 
 /* Returns the length of the initial substring of STRING that
@@ -372,3 +374,12 @@ strlcat (char *dst, const char *src, size_t size)
     }
   return src_len + dst_len;
 }
+
+
+void
+str_copy_first_word(char * dst, const char * src, size_t destbuflen) {
+  strlcpy(dst, src, destbuflen);
+  char * save;
+  strtok_r(dst, " ", &save);
+}
+

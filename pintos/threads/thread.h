@@ -4,16 +4,16 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
-#include "fpr_arith.h"
+#include "threads/fpr_arith.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
-{
+  {
     THREAD_RUNNING,     /* Running thread. */
     THREAD_READY,       /* Not running but ready to run. */
     THREAD_BLOCKED,     /* Waiting for an event to trigger. */
     THREAD_DYING        /* About to be destroyed. */
-};
+  };
 
 /* Thread identifier type.
    You can redefine this to whatever type you like. */
@@ -91,7 +91,7 @@ typedef int tid_t;
    ready state is on the run queue, whereas only a thread in the
    blocked state is on a semaphore wait list. */
 struct thread
-{
+  {
     /* Owned by thread.c. */
     tid_t tid;                          /* Thread identifier. */
     enum thread_status status;          /* Thread state. */
@@ -104,10 +104,10 @@ struct thread
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
-    uint32_t * pagedir;                /* Page directory. */
-    struct thread *parent;             /* Parent thread. */   
-    bool is_parent_waiting;            /* Parent is waiting for this thread to exit. */
-    int exit_status;                   /* Exit status of the thread. */
+    uint32_t * pagedir;                 /* Page directory. */
+    int exit_status;                    /* Status passed to exit() */
+    struct thread* parent;              /* Parent thread */
+    bool parent_waiting;                /* True if parent is waiting */
 #endif
 
     int64_t wakeup_at_tick;
@@ -119,7 +119,7 @@ struct thread
     int priority;                       /* Priority. */
     int nice;                           /* Niceness value. */
     FPReal recent_cpu;                  /* Recent cpu usage of the thread. */
-};
+  };
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -162,9 +162,8 @@ int thread_get_load_avg (void);
 
 void thread_sleep (int64_t wakeup_at);
 
-bool thread_priority_cmp (const struct list_elem* a,
-                          const struct list_elem* b,
-                          void* aux);
-struct thread *thread_get_by_tid (int tid);
+bool thread_priority_cmp (const struct list_elem* a, 
+  const struct list_elem* b,
+  void* aux);
 
 #endif /* threads/thread.h */
