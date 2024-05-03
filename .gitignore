@@ -1,2 +1,6 @@
 pintos/threads/build/*
+pintos/userprog/build/*
+pintos/examples/*
+**/bochsout.txt
+**/bochsrc.txt
 pintos/.idea/*
