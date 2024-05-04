@@ -31,19 +31,25 @@ typedef int tid_t;
 #define NICE_DEFAULT 0                   /* Default niceness. */
 #define NICE_MAX 20                      /* Highest niceness. */
 
+/* Max filename length for a pintos executable.
+ * Comes from the original Pintos code and I made it into a definition. */
+#define MAX_THREADNAME_LENGTH 16
+
+
+//TODO: to be checked
 struct child_thread_elem
-{
+  {
     int exit_status;
     int loading_status;
     struct semaphore wait_sema;
     tid_t tid;
     struct thread *t;
     struct list_elem elem;
-};
+  };
 
-/* Max filename length for a pintos executable.
- * Comes from the original Pintos code and I made it into a definition. */
-#define MAX_THREADNAME_LENGTH 16
+//END - TODO
+
+
 
 /* A kernel thread or user process.
 
@@ -115,10 +121,18 @@ struct thread
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
-    uint32_t * pagedir;                 /* Page directory. */
+    uint32_t * pagedir;/* Page directory. */
+#endif
+    struct thread* parent;
     int exit_status;                    /* Status passed to exit() */
     bool parent_waiting;                /* True if parent is waiting */
-#endif
+    struct list children_list;
+    struct child_thread_elem *child_elem; /* A pointer will be allocated by exec
+                                             syscall to be able to be accessed by
+                                             parent if this thread is destroyed */
+
+//END - TODO
+
 
     int64_t wakeup_at_tick;
 
@@ -129,10 +143,6 @@ struct thread
     int priority;                       /* Priority. */
     int nice;                           /* Niceness value. */
     FPReal recent_cpu;                  /* Recent cpu usage of the thread. */
-
-    struct thread* parent;              /* Parent thread */
-    struct list children_list;
-    struct child_thread_elem *child_elem;
   };
 
 /* If false (default), use round-robin scheduler.
@@ -179,7 +189,7 @@ void thread_sleep (int64_t wakeup_at);
 struct child_thread_elem *thread_get_child (tid_t tid);
 bool remove_child (tid_t tid);
 
-bool thread_priority_cmp (const struct list_elem* a, 
+bool thread_priority_cmp (const struct list_elem* a,
   const struct list_elem* b,
   void* aux);
 
