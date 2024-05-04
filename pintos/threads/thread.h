@@ -34,6 +34,22 @@ typedef int tid_t;
  * Comes from the original Pintos code and I made it into a definition. */
 #define MAX_THREADNAME_LENGTH 16
 
+
+//TODO: to be checked
+struct child_thread_elem
+  {
+    int exit_status;
+    int loading_status;
+    struct semaphore wait_sema;
+    tid_t tid;
+    struct thread *t;
+    struct list_elem elem;
+  };
+
+//END - TODO
+
+
+
 /* A kernel thread or user process.
 
    Each thread structure is stored in its own 4 kB page.  The
@@ -105,10 +121,18 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t * pagedir;                 /* Page directory. */
-    int exit_status;                    /* Status passed to exit() */
+#endif
+//TODO: to be checked
+
     struct thread* parent;              /* Parent thread */
     bool parent_waiting;                /* True if parent is waiting */
-#endif
+    struct list children_list;
+    struct child_thread_elem *child_elem; /* A pointer will be allocated by exec
+                                             syscall to be able to be accessed by
+                                             parent if this thread is destroyed */    
+
+//END - TODO
+
 
     int64_t wakeup_at_tick;
 
