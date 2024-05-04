@@ -4,7 +4,8 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
-#include "threads/fpr_arith.h"
+#include "../kernel/fpr_arith.h"
+#include "synch.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -29,6 +30,16 @@ typedef int tid_t;
 #define NICE_MIN -20                     /* Lowest niceness. */
 #define NICE_DEFAULT 0                   /* Default niceness. */
 #define NICE_MAX 20                      /* Highest niceness. */
+
+struct child_thread_elem
+{
+    int exit_status;
+    int loading_status;
+    struct semaphore wait_sema;
+    tid_t tid;
+    struct thread *t;
+    struct list_elem elem;
+};
 
 /* Max filename length for a pintos executable.
  * Comes from the original Pintos code and I made it into a definition. */
@@ -106,7 +117,6 @@ struct thread
     /* Owned by userprog/process.c. */
     uint32_t * pagedir;                 /* Page directory. */
     int exit_status;                    /* Status passed to exit() */
-    struct thread* parent;              /* Parent thread */
     bool parent_waiting;                /* True if parent is waiting */
 #endif
 
@@ -119,6 +129,10 @@ struct thread
     int priority;                       /* Priority. */
     int nice;                           /* Niceness value. */
     FPReal recent_cpu;                  /* Recent cpu usage of the thread. */
+
+    struct thread* parent;              /* Parent thread */
+    struct list children_list;
+    struct child_thread_elem *child_elem;
   };
 
 /* If false (default), use round-robin scheduler.
@@ -161,6 +175,9 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 void thread_sleep (int64_t wakeup_at);
+
+struct child_thread_elem *thread_get_child (tid_t tid);
+bool remove_child (tid_t tid);
 
 bool thread_priority_cmp (const struct list_elem* a, 
   const struct list_elem* b,
