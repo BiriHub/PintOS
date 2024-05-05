@@ -8,4 +8,9 @@ int process_wait (tid_t);
 void process_exit (void);
 void process_activate (void);
 
+struct pcb {
+    char *cmd_copy;
+    struct thread *parent;
+    struct semaphore *loading_sema;
+};
 #endif /* userprog/process.h */

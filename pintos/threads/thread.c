@@ -682,6 +682,7 @@ init_thread (struct thread *t, const char *name, int priority)
    * filename that it executes, excluding any arguments passed
    * along with it in the command line. */
   str_copy_first_word(t->name, name, MAX_THREADNAME_LENGTH);
+  list_init (&t->children_list);
 #else
   /* For the threads tests to keep passing, the thread name should
    * contain all words passed to the (const char *name) argument. */
