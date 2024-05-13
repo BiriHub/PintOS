@@ -4,7 +4,8 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
-#include "../kernel/fpr_arith.h"
+#include "threads/fpr_arith.h"
+#include "threads/synch.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -106,8 +107,10 @@ struct thread
     /* Owned by userprog/process.c. */
     uint32_t * pagedir;                 /* Page directory. */
     int exit_status;                    /* Status passed to exit() */
+    struct list children_data;          /* List of children of this thread; stays after children finish. */
+    struct semaphore sem_child_loaded; /* Makes this thread block when creating a new child, which unblocks it. */
+    bool child_load_error;            /* Used for the child to inform its parent about creation. */
     struct thread* parent;              /* Parent thread */
-    bool parent_waiting;                /* True if parent is waiting */
 #endif
 
     int64_t wakeup_at_tick;
@@ -120,6 +123,22 @@ struct thread
     int nice;                           /* Niceness value. */
     FPReal recent_cpu;                  /* Recent cpu usage of the thread. */
   };
+
+/* Used for the wait(tid) system call. The parent must keep track of the
+ * threads that it has created, so that it can return their correct exit
+ * status, even after they've finished. The child_thread item can be
+ * removed only after the thread has been waited for.
+ *    The alternative for this would be to assume that a thread only waits
+ * its last child, which is not part of the specification. */
+struct child_thread_data {
+    struct thread * thread_ref;
+    tid_t tid;
+    int exit_status;
+    struct semaphore sem_exited;
+    struct list_elem elem;
+};
+
+struct child_thread_data * thread_get_child_data(struct thread * parent, tid_t child_tid);
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -149,7 +168,7 @@ void thread_yield (void);
 void thread_yield_on_higher_priority (void);
 
 /* Performs some operation on thread t, given auxiliary data AUX. */
-typedef void thread_action_func (struct thread *t, void *aux);
+typedef void thread_action_func (struct thread *thread_ref, void *aux);
 void thread_foreach (thread_action_func *, void *);
 
 int thread_get_priority (void);
