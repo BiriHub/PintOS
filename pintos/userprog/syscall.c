@@ -1,364 +1,328 @@
+
 #include "userprog/syscall.h"
 #include <stdio.h>
+#include <string.h>
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
-#include <string.h>
-#include "userprog/process.h"
 #include "threads/vaddr.h"
-#include "userprog/pagedir.h"
-#include "lib/kernel/hash.h"
-#include "filesys/filesys.h"
-#include "filesys/file.h"
+#include "threads/palloc.h"
+#include "userprog/process.h"
+#include "devices/shutdown.h"
+#include "hash.h"
 
-#include "devices/input.h"
 
-typedef int (*handler)(uint32_t, uint32_t, uint32_t);
+typedef void (*handler)(struct intr_frame *);
 
-static handler syscall_vec[128];
+static void syscall_exit(struct intr_frame *);
 
-static int sys_exit(int status);
+static void syscall_exec(struct intr_frame *);
 
-static int sys_wait(tid_t tid);
+static void syscall_wait(struct intr_frame *);
 
-static tid_t sys_exec(const char *file_name);
+static void syscall_write(struct intr_frame *);
 
-static void syscall_nop(void);
+static bool syscall_create(struct intr_frame *);
 
-static void sys_halt(void);
+static void syscall_remove(struct intr_frame *);
 
-bool sys_create(const char *filename, unsigned initial_size);
+static void syscall_open(struct intr_frame *);
 
-bool sys_remove(const char *filename);
+static void syscall_read(struct intr_frame *);
 
-int sys_open(const char *file);
+static void syscall_filesize(struct intr_frame *);
 
-int sys_filesize(int fd);
+static void syscall_tell(struct intr_frame *);
 
-void sys_seek(int fd, unsigned position);
+static void syscall_seek(struct intr_frame *);
 
-unsigned sys_tell(int fd);
+static void syscall_close(struct intr_frame *);
 
-void sys_close(int fd);
+static void syscall_halt(struct intr_frame *);
 
-int sys_read(int fd, void *buffer, unsigned size);
-
-int sys_write(int fd, const void *buffer, unsigned size);
-
-static int32_t get_user(const uint8_t *uaddr);
-
-static bool put_user(uint8_t *udst, uint8_t byte);
-
-static bool check_user_address(void *ptr);
+static bool check_user_address(void *);
 
 static void syscall_handler(struct intr_frame *);
 
-struct fd_item {
+static struct file *get_fd_elem(int);
+
+#define SYSCALL_MAX_CODE 19
+static handler call[SYSCALL_MAX_CODE + 1];
+
+
+struct fd_elem {
     int fd;
     struct file *file;
-    struct hash_elem elem;
+    struct hash_elem hash_elem;
+    struct thread *holder;
 };
 
-int next_fd = 3;
+
 struct hash fd_table;
-struct lock filesys_lock;
 
-static unsigned item_hash(const struct hash_elem *e, void *aux) {
-    struct fd_item *i = hash_entry(e, struct fd_item, elem);
-    return hash_int(i->fd);
+
+struct lock filesys_lock; /* Lock for filesystem */
+
+/* Hash functions. */
+static unsigned elem_hash(const struct hash_elem *e, void *aux UNUSED) {
+    struct fd_elem *fd_elem = hash_entry(e, struct fd_elem, hash_elem);
+    return hash_int(fd_elem->fd);
 }
 
 static bool
-item_compare(const struct hash_elem *a, const struct hash_elem *b, void *aux) {
-    struct fd_item *i_a = hash_entry(a, struct fd_item, elem);
-    struct fd_item *i_b = hash_entry(b, struct fd_item, elem);
-    return i_a->fd < i_b->fd;
+elem_compare(const struct hash_elem *a, const struct hash_elem *b, void *aux
+           UNUSED) {
+    struct fd_elem *fd_a = hash_entry(a, struct fd_elem, hash_elem);
+    struct fd_elem *fd_b = hash_entry(b, struct fd_elem, hash_elem);
+    return fd_a->fd < fd_b->fd;
 }
-
-/**
- * Reads a single 'byte' at user memory admemory at 'uaddr'.
- * 'uaddr' must be below PHYS_BASE.
- *
- * Returns the byte value if successful (extract the least significant byte),
- * or -1 in case of error (a segfault occurred or invalid uaddr)
- */
-static int32_t
-get_user(const uint8_t *uaddr) {
-    // check that a user pointer `uaddr` points below PHYS_BASE
-    if (!((void *) uaddr < PHYS_BASE)) {
-        return -1;
-    }
-
-    // as suggested in the reference manual, see (3.1.5)
-    int result;
-    asm ("movl $1f, %0; movzbl %1, %0; 1:"
-            : "=&a" (result) : "m" (*uaddr));
-    return result;
-}
-
-/* Writes a single byte (content is 'byte') to user address 'udst'.
- * 'udst' must be below PHYS_BASE.
- *
- * Returns true if successful, false if a segfault occurred.
- */
-static bool
-put_user(uint8_t *udst, uint8_t byte) {
-    // check that a user pointer `udst` points below PHYS_BASE
-    if (!((void *) udst < PHYS_BASE)) {
-        return false;
-    }
-
-    int error_code;
-
-    // as suggested in the reference manual, see (3.1.5)
-    asm ("movl $1f, %0; movb %b2, %1; 1:"
-            : "=&a" (error_code), "=m" (*udst) : "q" (byte));
-    return error_code != -1;
-}
-
 
 void
 syscall_init(void) {
     intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
-    memset(syscall_vec, (int) &syscall_nop, 128);
-    syscall_vec[SYS_EXIT] = (handler) sys_exit;
-    syscall_vec[SYS_WAIT] = (handler) sys_wait;
-    syscall_vec[SYS_EXEC] = (handler) sys_exec;
-    syscall_vec[SYS_HALT] = (handler) sys_halt;
-    syscall_vec[SYS_CREATE] = (handler) sys_create;
-    syscall_vec[SYS_REMOVE] = (handler) sys_remove;
-    syscall_vec[SYS_OPEN] = (handler) sys_open;
-    syscall_vec[SYS_FILESIZE] = (handler) sys_filesize;
-    syscall_vec[SYS_SEEK] = (handler) sys_seek;
-    syscall_vec[SYS_TELL] = (handler) sys_tell;
-    syscall_vec[SYS_CLOSE] = (handler) sys_close;
-    syscall_vec[SYS_READ] = (handler) sys_read;
-    syscall_vec[SYS_WRITE] = (handler) sys_write;
-    hash_init(&fd_table, item_hash, item_compare, NULL);
+
+    /* Any syscall not registered here should be NULL (0) in the call array. */
+    memset(call, 0, SYSCALL_MAX_CODE + 1);
+
+    /* Check file lib/syscall-nr.h for all the syscall codes and file
+     * lib/user/syscall.c for a short explanation of each system call. */
+    call[SYS_EXIT] = syscall_exit;   /* Terminate this process. */
+    call[SYS_EXEC] = syscall_exec;   /* Start another process. */
+    call[SYS_WAIT] = syscall_wait;   /* Wait for a child process to die. */
+    call[SYS_WRITE] = syscall_write;  /* Write to a file. */
+    call[SYS_CREATE] = syscall_create;
+    call[SYS_REMOVE] = syscall_remove;
+    call[SYS_OPEN] = syscall_open;
+    call[SYS_READ] = syscall_read;
+    call[SYS_FILESIZE] = syscall_filesize;
+    call[SYS_TELL] = syscall_tell;
+    call[SYS_SEEK] = syscall_seek;
+    call[SYS_CLOSE] = syscall_close;
+    call[SYS_HALT] = syscall_halt;
+
+    hash_init(&fd_table, elem_hash, elem_compare, NULL);
     lock_init(&filesys_lock);
-}
-
-static bool check_ptr(const void *ptr) {
-    if (ptr == NULL || is_kernel_vaddr(ptr) ||
-        pagedir_get_page(thread_current()->pagedir, ptr) == NULL) {
-        sys_exit(-1);
-    }
-    return false;
-}
-
-static
-void sys_halt(void) {
-    shutdown_power_off();
-}
-
-bool sys_create(const char *filename, unsigned initial_size) {
-    if (check_ptr(filename)) return 0;
-    lock_acquire(&filesys_lock);
-    bool return_code = filesys_create(filename, initial_size);
-    lock_release(&filesys_lock);
-    return return_code;
-}
-
-bool sys_remove(const char *filename) {
-    if (check_ptr(filename)) return 0;
-    lock_acquire(&filesys_lock);
-    bool return_code = filesys_remove(filename);
-    lock_release(&filesys_lock);
-    return return_code;
-}
-
-int sys_open(const char *file) {
-    if (check_ptr(file)) return -1;
-    struct file *file_opened;
-    struct fd_item *fd = malloc(sizeof(struct fd_item *));
-    if (!fd) {
-        return -1;
-    }
-
-    lock_acquire(&filesys_lock);
-    file_opened = filesys_open(file);
-    //printf("File opened: %x\n", file_opened);
-    if (!file_opened) {
-        free(fd);
-        lock_release(&filesys_lock);
-        return -1;
-    }
-
-    fd->file = file_opened;
-    fd->fd = next_fd++;
-    //printf("Hash put: %x %d\n", file_opened, fd->fd);
-    hash_insert(&fd_table, &fd->elem);
-    lock_release(&filesys_lock);
-    return fd->fd;
-}
-
-int sys_filesize(int fd) {
-    lock_acquire(&filesys_lock);
-    struct fd_item i;
-    i.fd = fd;
-    struct hash_elem *h = hash_find(&fd_table, &i.elem);
-    if (h == NULL) sys_exit(-1);
-    struct fd_item *file_d = hash_entry(h, struct fd_item, elem);
-
-    if (file_d == NULL) {
-        lock_release(&filesys_lock);
-        return -1;
-    }
-
-    int ret = file_length(file_d->file);
-    lock_release(&filesys_lock);
-    return ret;
-}
-
-void sys_seek(int fd, unsigned position) {
-    lock_acquire(&filesys_lock);
-    struct fd_item i;
-    i.fd = fd;
-    struct hash_elem *h = hash_find(&fd_table, &i.elem);
-    if (h == NULL) sys_exit(-1);
-    struct fd_item *file_d = hash_entry(h, struct fd_item, elem);
-
-    if (file_d && file_d->file) {
-        file_seek(file_d->file, position);
-    } else
-        return;
-
-    lock_release(&filesys_lock);
-}
-
-unsigned sys_tell(int fd) {
-    lock_acquire(&filesys_lock);
-    struct fd_item i;
-    i.fd = fd;
-    struct hash_elem *h = hash_find(&fd_table, &i.elem);
-    if (h == NULL) sys_exit(-1);
-    struct fd_item *file_d = hash_entry(h, struct fd_item, elem);
-
-    unsigned ret;
-    if (file_d && file_d->file) {
-        ret = file_tell(file_d->file);
-    } else
-        ret = -1;
-
-    lock_release(&filesys_lock);
-    return ret;
-}
-
-void sys_close(int fd) {
-    lock_acquire(&filesys_lock);
-    struct fd_item i;
-    i.fd = fd;
-    struct hash_elem *h = hash_find(&fd_table, &i.elem);
-    if (h == NULL) sys_exit(-1);
-    struct fd_item *file_d = hash_entry(h, struct fd_item, elem);
-    //printf("File close id: %x\n", file_d);
-    if (file_d && file_d->file) {
-        //printf("File closed: %x\n", file_d->file);
-        file_close(file_d->file);
-        hash_delete(&fd_table, &(file_d->elem));
-        free(file_d);
-    }
-    lock_release(&filesys_lock);
-}
-
-int sys_read(int fd, void *buffer, unsigned size) {
-    if (check_ptr(buffer) || check_ptr(buffer + size)) return -1;
-    int ret;
-    lock_acquire(&filesys_lock);
-
-    if (fd == 0) {
-        unsigned i;
-        for (i = 0; i < size; ++i) {
-            if (!put_user(buffer + i, input_getc())) {
-                lock_release(&filesys_lock);
-                sys_exit(-1); // segfault
-            }
-        }
-        ret = size;
-    } else {
-        struct fd_item i;
-        i.fd = fd;
-        struct hash_elem *h = hash_find(&fd_table, &i.elem);
-        if (h == NULL) sys_exit(-1);
-        struct fd_item *file_d = hash_entry(h, struct fd_item, elem);
-
-        if (file_d && file_d->file) {
-            ret = file_read(file_d->file, buffer, size);
-        } else ret = -1;
-    }
-    lock_release(&filesys_lock);
-    return ret;
-}
-
-int sys_write(int fd, const void *buffer, unsigned size) {
-    unsigned i;
-    for (i = 0; i <= size; i++) {
-        if (check_ptr(buffer + size)) return -1;
-    }
-    int ret;
-
-    if (fd == 1) {
-        lock_acquire(&filesys_lock);
-        putbuf(buffer, size);
-        ret = size;
-        lock_release(&filesys_lock);
-    } else {
-        lock_acquire(&filesys_lock);
-        struct fd_item i;
-        i.fd = fd;
-        struct hash_elem *h = hash_find(&fd_table, &i.elem);
-        if (h == NULL) sys_exit(-1);
-        struct fd_item *file_d = hash_entry(h, struct fd_item, elem);
-
-        if (file_d && file_d->file) {
-            ret = file_write(file_d->file, buffer, size);
-        } else ret = -1;
-        lock_release(&filesys_lock);
-    }
-
-    return ret;
-}
-
-static void
-syscall_nop(void) {
-    printf("Syscall not implemented");
 }
 
 static void
 syscall_handler(struct intr_frame *f) {
-    handler h;
-    int *p;
-    int ret;
-
-    p = f->esp;
-    h = syscall_vec[*p];
-    ret = h(*(p + 1), *(p + 2), *(p + 3));
-
-    f->eax = ret;
+    int syscall_code = *((int *) f->esp);
+    call[syscall_code](f);
 }
 
-int
-sys_exit(int status) {
+static void
+syscall_exit(struct intr_frame *f) {
+    int *stack = f->esp;
     struct thread *t = thread_current();
-    t->exit_status = status;
+    t->exit_status = *(stack + 1);
+    thread_get_child_data(t->parent, t->tid)->exit_status = t->exit_status;
     thread_exit();
-    return -1;
 }
 
-int
-sys_wait(tid_t tid) {
-    int status = process_wait(tid);
-    return status;
+static void
+syscall_exec(struct intr_frame *f) {
+    int *stackpointer = f->esp;
+    char *command = (char *) *(stackpointer + 1);
+
+    if (check_user_address(command))
+        f->eax = process_execute(command);
+    else
+        f->eax = -1;
 }
 
-tid_t
-sys_exec(const char *file_name) {
-    if (check_user_address(file_name))
-        return process_execute(file_name);
-    return -1;
+static void
+syscall_wait(struct intr_frame *f) {
+    int *stackpointer = (void *) f->esp;
+    tid_t child_tid = *(stackpointer + 1);
+    f->eax = process_wait(child_tid);
+}
+
+static void syscall_write(struct intr_frame *f) {
+    int *stack = f->esp;
+    int fd = *(stack + 1);
+    const void *buffer = (const void *) *(stack + 2);
+    unsigned size = *(stack + 3);
+
+    if (check_user_address((void *) buffer) &&
+        check_user_address((void *) buffer + size)) {
+        if (fd == 1) {  // Write to stdout
+            putbuf(buffer, size);
+            f->eax = size;
+        } else {
+            lock_acquire(&filesys_lock);
+            struct file *fl = get_fd_elem(fd);
+            if (fl) {
+                f->eax = file_write(fl, buffer, size);
+            } else {
+                f->eax = -1;
+            }
+            lock_release(&filesys_lock);
+        }
+    } else {
+        // f->eax = -1;
+        *(stack + 1) = -1;
+        syscall_exit(f);
+    }
+}
+
+static bool syscall_create(struct intr_frame *f) {
+    int *stack = f->esp;
+    const char *fl = (const char *) *(stack + 1);
+    unsigned initial_size = *(stack + 2);
+
+    if (check_user_address((void *) fl)) {
+        lock_acquire(&filesys_lock);
+        f->eax = filesys_create(fl, initial_size);
+        lock_release(&filesys_lock);
+    } else {
+        *(stack + 1) = -1;
+        syscall_exit(f);
+    }
+    return f->eax;
+}
+
+static void syscall_remove(struct intr_frame *f) {
+    int *stack = f->esp;
+    const char *file = (const char *) *(stack + 1);
+
+    if (check_user_address((void *) file)) {
+        lock_acquire(&filesys_lock);
+        f->eax = filesys_remove(file);
+        lock_release(&filesys_lock);
+    } else {
+        f->eax = false;
+    }
+}
+
+static void syscall_open(struct intr_frame *f) {
+    int *stack = f->esp;
+    const char *file = (const char *) *(stack + 1);
+
+    if (check_user_address((void *) file)) {
+        lock_acquire(&filesys_lock);
+        struct file *opened_file = filesys_open(file);
+        lock_release(&filesys_lock);
+        if (opened_file) {
+            static int next_fd = 2;
+            struct fd_elem *entry = malloc(sizeof(struct fd_elem));
+            if (!entry) return -1;
+
+            entry->fd = next_fd++;
+            entry->file = opened_file;
+            entry->holder = thread_current();
+            hash_insert(&fd_table, &entry->hash_elem);
+            f->eax = entry->fd;
+        } else {
+            f->eax = -1;
+        }
+    } else {
+        *(stack + 1) = -1;
+        syscall_exit(f);
+    }
+}
+
+static void syscall_read(struct intr_frame *f) {
+    int *stack = f->esp;
+    int fd = *(stack + 1);
+    void *buffer = (void *) *(stack + 2);
+    unsigned size = *(stack + 3);
+
+    if (check_user_address(buffer) && check_user_address(buffer + size)) {
+        lock_acquire(&filesys_lock);
+        struct file *fl = get_fd_elem(fd);
+        if (fl) {
+            f->eax = file_read(fl, buffer, size);
+        } else {
+            f->eax = -1;
+        }
+        lock_release(&filesys_lock);
+    } else {
+        *(stack + 1) = -1;
+        syscall_exit(f);
+    }
+}
+
+static void syscall_filesize(struct intr_frame *f) {
+    int *stack = f->esp;
+    int fd = *(stack + 1);
+
+    lock_acquire(&filesys_lock);
+    struct file *file = get_fd_elem(fd);
+    if (file) {
+        f->eax = file_length(file);
+    } else {
+        f->eax = -1;
+    }
+    lock_release(&filesys_lock);
+}
+
+static void syscall_close(struct intr_frame *f) {
+    int *stack = f->esp;
+    int fd = *(stack + 1);
+    lock_acquire(&filesys_lock);
+    struct fd_elem tmp;
+    tmp.fd = fd;
+    struct hash_elem *h_elem = hash_find(&fd_table, &tmp.hash_elem);
+    if (h_elem) {
+        struct fd_elem *h_entry = hash_entry(h_elem, struct fd_elem,
+                                             hash_elem);
+        if (h_entry->holder == thread_current()) {
+            struct hash_elem *e = hash_delete(&fd_table, &tmp.hash_elem);
+            if (e) {
+                struct fd_elem *entry = hash_entry(e, struct fd_elem,
+                                                   hash_elem);
+                file_close(entry->file);
+                free(entry);
+            }
+        }
+    }
+    lock_release(&filesys_lock);
+}
+
+static void syscall_tell(struct intr_frame *f) {
+    int *stack = f->esp;
+    int fd = *(stack + 1);
+
+    lock_acquire(&filesys_lock);
+    struct file *fl = get_fd_elem(fd);
+    if (fl) {
+        f->eax = file_tell(fl);
+    } else {
+        f->eax = -1;
+    }
+    lock_release(&filesys_lock);
+}
+
+static void syscall_seek(struct intr_frame *f) {
+    int *stack = f->esp;
+    int fd = *(stack + 1);
+    unsigned pos = *(stack + 2);
+
+    lock_acquire(&filesys_lock);
+    struct file *fl = get_fd_elem(fd);
+    if (fl) {
+        file_seek(fl, pos);
+    }
+    lock_release(&filesys_lock);
+}
+
+static void syscall_halt(struct intr_frame *f) {
+    shutdown_power_off();
 }
 
 static bool check_user_address(void *ptr) {
     return ptr != NULL && is_user_vaddr(ptr) &&
            pagedir_get_page(thread_current()->pagedir, ptr);
+}
+
+static struct file *get_fd_elem(int fd) {
+    struct fd_elem tmp;
+    struct hash_elem *h_elem;
+    tmp.fd = fd;
+    h_elem = hash_find(&fd_table, &tmp.hash_elem);
+    if (h_elem) {
+        struct fd_elem *entry = hash_entry(h_elem, struct fd_elem, hash_elem);
+        return entry->file;
+    }
+    return NULL;
 }

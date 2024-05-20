@@ -4,7 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
-#include "threads/fpr_arith.h"
+#include "lib/kernel/fpr_arith.h"
 #include "threads/synch.h"
 
 /* States in a thread's life cycle. */
