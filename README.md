@@ -3,7 +3,7 @@
 ### Overview
 In this project, you will re-implement the `timer_sleep()` function in PintOS to avoid busy waiting and to make it efficient.
 
-### Current Implementation
+### Current implementation
 The current `timer_sleep()` function in `devices/timer.c` uses a busy wait approach, which is suboptimal:
 
 ```c
