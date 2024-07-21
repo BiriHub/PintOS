@@ -4,7 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
-#include <fpr_arith.h>
+#include <fpr_arith.h> // dir : lib/kernel/fpr_arith.h
 
 /* States in a thread's life cycle. */
 enum thread_status
