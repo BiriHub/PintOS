@@ -14,6 +14,16 @@ void timer_sleep (int64_t ticks)
     thread_yield();
 }
 ```
+The task requires to re-implement this function so as to :
+1. Avoid ***Busy Waiting***
+2. Not brake tests that already pass!
+3. be (possibly) ***efficient***
+
+### Files changed
+* pintos/threads/**thread.h**
+* pintos/threads/**thread.c**
+* pintos/devices/**timer.c**
+
 ### TESTS (20/27 tests FAIL)
 The implementation makes **pass** the next tests:
 
@@ -25,3 +35,4 @@ The implementation makes **pass** the next tests:
 * tests/threads/alarm-negative
 * tests/threads/mlfqs-fair-2 
 * tests/threads/ml fqs-fair-20
+
