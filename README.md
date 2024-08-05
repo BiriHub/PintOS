@@ -14,7 +14,14 @@ void timer_sleep (int64_t ticks)
     thread_yield();
 }
 ```
-<!-- ## My solution
+### TESTS (20/27 tests FAIL)
+The implementation makes **pass** the next tests:
 
-### thread.h 
-struct thread has been  -->
+* tests/threads/alarm-single 
+
+* tests/threads/alarm-multiple
+* tests/threads/alarm-simultaneous
+* tests/threads/alarm-zero
+* tests/threads/alarm-negative
+* tests/threads/mlfqs-fair-2 
+* tests/threads/ml fqs-fair-20
