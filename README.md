@@ -43,3 +43,25 @@ The advanced scheduler adjusts thread priorities based on a "nice" value and rec
 - **Load Average (global):** Updated as `(59/60) * load_avg + (1/60) * ready or running threads`.
 - **Recent CPU (per thread):** Initially 0. Updated every second and on each tick for the current thread.
 - **Priority (per thread):** Calculated as `PRI_MAX - (recent_cpu / 4) - (nice * 2)`, updated every 4 ticks.
+
+## TESTS (_10/27 tests FAIL_)
+The implementation makes **pass** the following tests :
+
+* tests/threads/alarm-single
+
+* tests/threads/alarm-multiple
+* tests/threads/alarm-simultaneous 
+* tests/threads/alarm-priority 
+* tests/threads/alarm-zero
+* tests/threads/alarm-negative 
+* tests/threads/priority-change
+* tests/threads/priority-fifo
+* tests/threads/priority-preempt
+* tests/threads/mlfqs-load-I 
+* tests/threads/mlfqs-load-60 
+* tests/threads/mlfqs-load-avg 
+* tests/threads/mlfqs-recent-I 
+* tests/threads/mlfqs-fair-2 
+* tests/threads/mlfqs-fair-20 
+* tests/threads/mlfqs-nice-2 
+* tests/threads/mlfqs-nice-10
