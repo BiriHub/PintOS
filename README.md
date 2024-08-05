@@ -44,6 +44,10 @@ The advanced scheduler adjusts thread priorities based on a "nice" value and rec
 - **Recent CPU (per thread):** Initially 0. Updated every second and on each tick for the current thread.
 - **Priority (per thread):** Calculated as `PRI_MAX - (recent_cpu / 4) - (nice * 2)`, updated every 4 ticks.
 
+## Files changed
+* pintos/threads/**thread.h**
+* pintos/threads/**thread.c**
+
 ## TESTS (_10/27 tests FAIL_)
 The implementation makes **pass** the following tests :
 
